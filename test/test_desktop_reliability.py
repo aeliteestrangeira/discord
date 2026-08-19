@@ -34,6 +34,20 @@ class DesktopReliabilityTests(unittest.TestCase):
         self.assertIn('log(`renderer ${message.slice(0, 300)}`)', main)
         self.assertNotIn('log(`renderer-console ${details?.message}`)', main)
 
+    def test_packaged_log_root_is_initialized_before_hcaptcha_diagnostics(self):
+        main = (ROOT / "desktop/main.cjs").read_text(encoding="utf-8")
+        backend = (ROOT / "desktop/backend.cjs").read_text(encoding="utf-8")
+        self.assertIn("function initializeDesktopLog(dataRoot)", backend)
+        self.assertIn("initializeDesktopLog,", backend)
+        self.assertIn("initializeDesktopLog(dataRoot);", main)
+        self.assertIn("desktop process start mode=", main)
+        early = main.split("const gotLock", 1)[0]
+        self.assertIn("initializeDesktopLog(dataRoot);", early)
+        start = main.split("async function startDesktop()", 1)[1]
+        self.assertLess(start.index("try {"), start.index("installHCaptchaNetworkDiagnostics(desktopSession);"))
+        self.assertIn("try { log(`ready-failure:", main)
+        self.assertIn("app.quit();", main)
+
     def test_hcaptcha_network_diagnostics_are_queryless_and_fail_closed(self):
         main = (ROOT / "desktop/main.cjs").read_text(encoding="utf-8")
         self.assertIn("HCAPTCHA_NETWORK_FILTER", main)
@@ -94,9 +108,9 @@ class DesktopReliabilityTests(unittest.TestCase):
         self.assertNotIn("markChecked();", before_remote)
         self.assertIn("markChecked();", after_remote)
 
-    def test_desktop_release_version_is_4_3_5(self):
+    def test_desktop_release_version_is_4_3_6(self):
         package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-        self.assertEqual(package["version"], "4.3.5")
+        self.assertEqual(package["version"], "4.3.6")
 
 
 if __name__ == "__main__":

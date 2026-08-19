@@ -5,7 +5,7 @@ const path = require("node:path");
 const { app, BrowserWindow, dialog, ipcMain, net, session } = require("electron");
 const { APP_URL } = require("./constants.cjs");
 const {
-  prepareLocalRuntime, waitForBackend, stopBackend, dataPaths,
+  prepareLocalRuntime, waitForBackend, stopBackend, dataPaths, initializeDesktopLog,
   privateBootstrapPresent, importPrivateBootstrap, log
 } = require("./backend.cjs");
 const { hardenWebContents, installPermissionPolicy, isAppUrl } = require("./security.cjs");
@@ -19,6 +19,8 @@ const dataRoot = path.join(
 );
 fs.mkdirSync(path.join(dataRoot, "electron"), { recursive: true });
 app.setPath("userData", path.join(dataRoot, "electron"));
+initializeDesktopLog(dataRoot);
+log(`desktop process start mode=${app.isPackaged ? "packaged" : "source"} version=${app.getVersion()}`);
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
@@ -164,13 +166,13 @@ function registerDesktopIpc() {
 }
 
 async function startDesktop() {
-  const desktopSession = session.fromPartition("persist:discord-desktop");
-  installPermissionPolicy(desktopSession);
-  installHCaptchaNetworkDiagnostics(desktopSession);
-  registerDesktopIpc();
-  mainWindow = createWindow();
-
   try {
+    const desktopSession = session.fromPartition("persist:discord-desktop");
+    installPermissionPolicy(desktopSession);
+    installHCaptchaNetworkDiagnostics(desktopSession);
+    registerDesktopIpc();
+    mainWindow = createWindow();
+
     await maybeImportPrivateBootstrap();
     const runtime = await prepareLocalRuntime({
       packaged: app.isPackaged,
@@ -224,7 +226,7 @@ app.on("window-all-closed", () => app.quit());
 
 if (gotLock) {
   app.whenReady().then(startDesktop).catch((error) => {
-    log(`ready-failure: ${error.stack || error.message}`);
+    try { log(`ready-failure: ${error.stack || error.message}`); } catch (_) {}
     app.quit();
   });
 }

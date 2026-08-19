@@ -24,6 +24,13 @@ function setLogRoot(dir) {
   logPath = path.join(runtimeRoot, "desktop.log");
 }
 
+function initializeDesktopLog(dataRoot) {
+  const paths = dataPaths(dataRoot);
+  ensureDir(paths.runtime);
+  setLogRoot(paths.runtime);
+  return logPath;
+}
+
 function log(line) {
   ensureDir(runtimeRoot);
   fs.appendFileSync(logPath, `${new Date().toISOString()} ${line}\n`, { encoding: "utf8" });
@@ -521,6 +528,7 @@ module.exports = Object.freeze({
   SOURCE_ROOT,
   get LOG() { return logPath; },
   dataPaths,
+  initializeDesktopLog,
   privateBootstrapPresent,
   importPrivateBootstrap,
   prepareLocalRuntime,
