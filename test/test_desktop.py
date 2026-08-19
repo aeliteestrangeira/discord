@@ -110,6 +110,16 @@ class DesktopArchitectureTests(unittest.TestCase):
         self.assertNotIn('Start-Process -FilePath "powershell.exe"', hostname)
         self.assertIn('System32\\icacls.exe', setup)
 
+
+    def test_packaged_powershell_uses_persistent_real_working_directory(self):
+        backend = (ROOT / "desktop/backend.cjs").read_text(encoding="utf-8")
+        self.assertIn('cwd = process.cwd()', backend)
+        self.assertIn('cwd-error', backend)
+        self.assertIn('"hostname", { env, cwd: dataRoot }', backend)
+        self.assertIn('"desktop-data-acl-and-trust", { env, cwd: dataRoot }', backend)
+        self.assertIn('phase: "python-dependencies",\n    cwd: SOURCE_ROOT', backend)
+        self.assertNotIn('cwd = SOURCE_ROOT', backend)
+
     def test_integrity_hashes_are_eol_canonical(self):
         generator = (ROOT / "priv/scripts/generate_integrity_manifest.py").read_text(encoding="utf-8")
         verifier = (ROOT / "verify_integrity.py").read_text(encoding="utf-8")

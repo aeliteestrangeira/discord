@@ -27,11 +27,23 @@ function log(line) {
   fs.appendFileSync(logPath, `${new Date().toISOString()} ${line}\n`, { encoding: "utf8" });
 }
 
-function run(command, args, { timeoutMs = 0, phase = command, cwd = SOURCE_ROOT, env = process.env } = {}) {
+function run(command, args, { timeoutMs = 0, phase = command, cwd = process.cwd(), env = process.env } = {}) {
   return new Promise((resolve, reject) => {
-    log(`[${phase}] start: ${command} ${args.join(" ")}`);
+    let effectiveCwd;
+    try {
+      effectiveCwd = path.resolve(cwd || process.cwd());
+      if (!fs.statSync(effectiveCwd).isDirectory()) {
+        throw new Error("nao e um diretorio");
+      }
+    } catch (_) {
+      const error = new Error(`${phase}: diretorio de trabalho invalido: ${cwd || "(vazio)"}`);
+      log(`[${phase}] cwd-error: ${error.message}`);
+      reject(error);
+      return;
+    }
+    log(`[${phase}] start cwd=${effectiveCwd}: ${command} ${args.join(" ")}`);
     const child = spawn(command, args, {
-      cwd,
+      cwd: effectiveCwd,
       windowsHide: true,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -127,7 +139,8 @@ async function ensurePythonEnvironment() {
   const python = devPython();
   if (fs.existsSync(python)) return;
   await run(resolveSystem32Executable("cmd.exe"), ["/d", "/s", "/c", "call INSTALL_DEPENDENCIES.bat"], {
-    phase: "python-dependencies"
+    phase: "python-dependencies",
+    cwd: SOURCE_ROOT
   });
   if (!fs.existsSync(python)) {
     throw new Error("O ambiente Python nao foi criado por INSTALL_DEPENDENCIES.bat.");
@@ -191,13 +204,14 @@ async function prepareSourceRuntime() {
   setLogRoot(path.join(SOURCE_ROOT, ".runtime"));
   log("desktop bootstrap begin mode=source");
   await ensurePythonEnvironment();
-  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "ensure_local_hostname.ps1"), [], "hostname");
-  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "harden_instance.ps1"), [], "instance-acl");
-  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "ensure_local_tls.ps1"), [], "local-tls");
+  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "ensure_local_hostname.ps1"), [], "hostname", { cwd: SOURCE_ROOT });
+  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "harden_instance.ps1"), [], "instance-acl", { cwd: SOURCE_ROOT });
+  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "ensure_local_tls.ps1"), [], "local-tls", { cwd: SOURCE_ROOT });
   await powershell(
     path.join(SOURCE_ROOT, "priv", "scripts", "restart_server.ps1"),
     ["-Port", String(APP_PORT), "-NoBrowser"],
-    "flask-restart"
+    "flask-restart",
+    { cwd: SOURCE_ROOT }
   );
   return { mode: "source", paths: dataPaths(SOURCE_ROOT) };
 }
@@ -234,9 +248,9 @@ async function preparePackagedRuntime({ resourcesPath, dataRoot }) {
   }
 
   const env = packagedEnv(paths);
-  await powershell(hostnameScript, ["-LogPath", path.join(paths.runtime, "hostname-setup.log")], "hostname", { env });
+  await powershell(hostnameScript, ["-LogPath", path.join(paths.runtime, "hostname-setup.log")], "hostname", { env, cwd: dataRoot });
   await run(tlsExe, [], { phase: "local-tls-generate", cwd: dataRoot, env, timeoutMs: 30000 });
-  await powershell(setupScript, ["-DataRoot", dataRoot, "-CaPath", paths.ca], "desktop-data-acl-and-trust", { env });
+  await powershell(setupScript, ["-DataRoot", dataRoot, "-CaPath", paths.ca], "desktop-data-acl-and-trust", { env, cwd: dataRoot });
 
   if (packagedBackend && !packagedBackend.killed) {
     try { packagedBackend.kill(); } catch (_) {}
@@ -304,7 +318,7 @@ async function stopBackend({ packaged = false } = {}) {
     return;
   }
   try {
-    await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "stop_server.ps1"), [], "flask-stop");
+    await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "stop_server.ps1"), [], "flask-stop", { cwd: SOURCE_ROOT });
   } catch (error) {
     log(`[flask-stop] non-fatal: ${error.message}`);
   }
