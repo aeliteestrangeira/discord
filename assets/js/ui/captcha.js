@@ -203,10 +203,15 @@ async function requestCaptchaToken() {
   return new Promise((resolve, reject) => {
     let settled = false;
     let widgetId = null;
-    let transientRetryUsed = false;
+    let providerRetryUsed = false;
+    let providerRetryTimer = null;
 
     const cleanup = () => {
       document.removeEventListener("keydown", onKeyDown, true);
+      if (providerRetryTimer) {
+        window.clearTimeout(providerRetryTimer);
+        providerRetryTimer = null;
+      }
       if (widgetId !== null && api?.remove) {
         try { api.remove(widgetId); } catch (_) {}
       }
@@ -229,8 +234,11 @@ async function requestCaptchaToken() {
     close?.addEventListener("click", cancel, { once: true });
     document.addEventListener("keydown", onKeyDown, true);
 
-    try {
-      widgetId = api.render(mount, {
+    const nonRecoverableProviderErrors = new Set(["rate-limited", "invalid-data", "script-error"]);
+
+    const renderWidget = ({ continueFlow = false } = {}) => {
+      let currentId = null;
+      currentId = api.render(mount, {
         sitekey: config.sitekey,
         theme: "light",
         hl: "pt-BR",
@@ -242,26 +250,73 @@ async function requestCaptchaToken() {
         },
         "expired-callback": () => {
           if (message) message.textContent = "A confirmação expirou. Marque a caixa novamente.";
-          try { api.reset(widgetId); } catch (_) {}
+          try { api.reset(currentId); } catch (_) {}
         },
         "error-callback": (errorCode) => {
-          const code = String(errorCode || "");
-          if (!settled && !transientRetryUsed && ["challenge-error", "internal-error"].includes(code)) {
-            transientRetryUsed = true;
-            if (message) message.textContent = "Reiniciando a confirmação...";
-            window.setTimeout(() => {
-              if (settled || widgetId === null) return;
+          const code = String(errorCode || "unknown").trim().toLowerCase() || "unknown";
+          console.warn(`[hcaptcha] provider-error code=${code} recovery=${providerRetryUsed ? "used" : "available"}`);
+          if (settled) return;
+
+          const canRecover = !providerRetryUsed && !nonRecoverableProviderErrors.has(code);
+          if (canRecover) {
+            providerRetryUsed = true;
+            if (message) message.textContent = "Reconectando à confirmação...";
+            providerRetryTimer = window.setTimeout(() => {
+              providerRetryTimer = null;
+              if (settled) return;
               try {
-                api.reset(widgetId);
+                if (currentId !== null && api?.remove) api.remove(currentId);
+              } catch (_) {}
+              if (widgetId === currentId) widgetId = null;
+              mount.replaceChildren();
+              try {
+                widgetId = renderWidget({ continueFlow: true });
+                console.info(`[hcaptcha] provider-recovery code=${code} widget=recreated`);
               } catch (_) {
+                console.warn(`[hcaptcha] provider-recovery-failed code=${code}`);
                 if (message) message.textContent = "Não foi possível carregar a confirmação. Tente novamente.";
               }
-            }, 600);
+            }, 700);
             return;
           }
-          if (message) message.textContent = "Não foi possível carregar a confirmação. Tente novamente.";
+
+          if (message) {
+            message.textContent = code === "rate-limited"
+              ? "Muitas tentativas de confirmação. Aguarde um instante e tente novamente."
+              : "Não foi possível carregar a confirmação. Tente novamente.";
+          }
         }
       });
+
+      if (continueFlow) {
+        window.setTimeout(() => {
+          if (settled || widgetId !== currentId) return;
+          if (!api?.execute) {
+            if (message) message.textContent = "Clique em Sou humano para continuar.";
+            console.warn("[hcaptcha] provider-recovery execute=unavailable");
+            return;
+          }
+          try {
+            const execution = api.execute(currentId, { async: true });
+            Promise.resolve(execution).then(() => {
+              console.info("[hcaptcha] provider-recovery execute=started");
+            }).catch(() => {
+              if (!settled && widgetId === currentId && message) {
+                message.textContent = "Clique em Sou humano para continuar.";
+              }
+              console.warn("[hcaptcha] provider-recovery execute=rejected");
+            });
+          } catch (_) {
+            if (message) message.textContent = "Clique em Sou humano para continuar.";
+            console.warn("[hcaptcha] provider-recovery execute=failed");
+          }
+        }, 200);
+      }
+      return currentId;
+    };
+
+    try {
+      widgetId = renderWidget();
       requestAnimationFrame(() => dialog?.focus({ preventScroll: true }));
     } catch (error) {
       settled = true;

@@ -26,6 +26,8 @@ function targetFromGuildNode(node) {
 }
 
 function targetFromEvent(event) {
+  const home = event.target?.closest?.('[data-list-item-id="guildsnav___home"]');
+  if (home) return "/channels/@me";
   const guildNode = event.target?.closest?.("[data-app-guild-id][data-app-guild-channel-id]");
   if (guildNode) return targetFromGuildNode(guildNode);
   const anchor = event.target?.closest?.('a[href^="/channels/"]');
@@ -97,10 +99,33 @@ function applyTreeSelection(treeItem, selected) {
   item?.querySelector(".blobContainer_e5445c")?.classList.toggle("selected_e5445c", selected);
 }
 
+function syncPersistentDmGroup(targetDocument, path) {
+  const current = document.getElementById("guild-list-unread-dms");
+  const next = targetDocument.getElementById("guild-list-unread-dms");
+  const onDirectMessages = path === "/channels/@me";
+  if (current && next) {
+    const replacement = document.importNode(next, true);
+    replacement.hidden = !onDirectMessages;
+    replacement.setAttribute("aria-hidden", onDirectMessages ? "false" : "true");
+    current.replaceWith(replacement);
+    return;
+  }
+  if (current) {
+    current.hidden = !onDirectMessages;
+    current.setAttribute("aria-hidden", onDirectMessages ? "false" : "true");
+  }
+}
+
 function updatePersistentGuildRail(path, guild) {
+  const onDirectMessages = path === "/channels/@me";
   const home = document.querySelector('[data-list-item-id="guildsnav___home"]');
-  applyTreeSelection(home, path === "/channels/@me");
-  const activeGuildId = path === "/channels/@me" ? "" : String(guild?.id || path.split("/")[2] || "");
+  applyTreeSelection(home, onDirectMessages);
+  const unreadDmGroup = document.getElementById("guild-list-unread-dms");
+  if (unreadDmGroup) {
+    unreadDmGroup.hidden = !onDirectMessages;
+    unreadDmGroup.setAttribute("aria-hidden", onDirectMessages ? "false" : "true");
+  }
+  const activeGuildId = onDirectMessages ? "" : String(guild?.id || path.split("/")[2] || "");
   for (const node of document.querySelectorAll("[data-app-guild-id]")) {
     const treeItem = node.querySelector('[data-list-item-id^="guildsnav___"]');
     applyTreeSelection(treeItem, String(node.dataset.appGuildId || "") === activeGuildId);
@@ -119,6 +144,7 @@ function applyDocument(path, html, { push = true } = {}) {
   importReplacement(parsed, ".sidebarList__5e434");
   importReplacement(parsed, ".page__5e434");
   importReplacement(parsed, ".title_c38106");
+  syncPersistentDmGroup(parsed, path);
   const guild = updateBootstraps(parsed);
   updatePersistentGuildRail(path, guild);
   document.title = parsed.title || document.title;

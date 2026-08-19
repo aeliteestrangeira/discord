@@ -58,6 +58,11 @@ function createWindow() {
     if (!isMainFrame || errorCode === -3) return;
     log(`did-fail-load ${errorCode} ${errorDescription} ${validatedURL}`);
   });
+  win.webContents.on("console-message", (details) => {
+    const message = String(details?.message || "");
+    if (!message.startsWith("[hcaptcha]")) return;
+    log(`renderer ${message.slice(0, 300)}`);
+  });
   win.webContents.on("render-process-gone", (_event, details) => {
     log(`renderer-gone reason=${details.reason} exitCode=${details.exitCode}`);
   });
