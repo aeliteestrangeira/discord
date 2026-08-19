@@ -27,6 +27,56 @@ let mainWindow = null;
 let quittingAfterStop = false;
 let backendStarted = false;
 
+const HCAPTCHA_NETWORK_FILTER = Object.freeze({
+  urls: ["https://hcaptcha.com/*", "https://*.hcaptcha.com/*"]
+});
+
+function sanitizeNetworkField(value, maxLength = 96) {
+  return String(value || "unknown")
+    .replace(/[^a-zA-Z0-9._:/-]/g, "_")
+    .slice(0, maxLength) || "unknown";
+}
+
+function safeNetworkTarget(value) {
+  try {
+    const parsed = new URL(String(value || ""));
+    const host = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname || "/";
+    return `${parsed.protocol}//${host}${pathname.slice(0, 180)}`;
+  } catch (_) {
+    return "invalid-url";
+  }
+}
+
+function installHCaptchaNetworkDiagnostics(desktopSession) {
+  const webRequest = desktopSession?.webRequest;
+  if (!webRequest) {
+    log("[hcaptcha-net] diagnostics-unavailable");
+    return;
+  }
+
+  webRequest.onErrorOccurred(HCAPTCHA_NETWORK_FILTER, (details = {}) => {
+    log(
+      `[hcaptcha-net] error target=${safeNetworkTarget(details.url)} ` +
+      `method=${sanitizeNetworkField(details.method, 12)} ` +
+      `type=${sanitizeNetworkField(details.resourceType, 24)} ` +
+      `error=${sanitizeNetworkField(details.error, 80)}`
+    );
+  });
+
+  webRequest.onCompleted(HCAPTCHA_NETWORK_FILTER, (details = {}) => {
+    const status = Number(details.statusCode || 0);
+    if (status < 400) return;
+    log(
+      `[hcaptcha-net] http target=${safeNetworkTarget(details.url)} ` +
+      `method=${sanitizeNetworkField(details.method, 12)} ` +
+      `type=${sanitizeNetworkField(details.resourceType, 24)} status=${status}`
+    );
+  });
+
+  log("[hcaptcha-net] diagnostics-installed");
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -114,7 +164,9 @@ function registerDesktopIpc() {
 }
 
 async function startDesktop() {
-  installPermissionPolicy(session.fromPartition("persist:discord-desktop"));
+  const desktopSession = session.fromPartition("persist:discord-desktop");
+  installPermissionPolicy(desktopSession);
+  installHCaptchaNetworkDiagnostics(desktopSession);
   registerDesktopIpc();
   mainWindow = createWindow();
 
@@ -157,7 +209,7 @@ app.on("second-instance", () => {
 });
 
 app.on("certificate-error", (_event, _webContents, url, error, _certificate, callback) => {
-  log(`certificate-error url=${url} error=${error}`);
+  log(`certificate-error target=${safeNetworkTarget(url)} error=${sanitizeNetworkField(error, 80)}`);
   callback(false);
 });
 

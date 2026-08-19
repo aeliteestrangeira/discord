@@ -34,6 +34,26 @@ class DesktopReliabilityTests(unittest.TestCase):
         self.assertIn('log(`renderer ${message.slice(0, 300)}`)', main)
         self.assertNotIn('log(`renderer-console ${details?.message}`)', main)
 
+    def test_hcaptcha_network_diagnostics_are_queryless_and_fail_closed(self):
+        main = (ROOT / "desktop/main.cjs").read_text(encoding="utf-8")
+        self.assertIn("HCAPTCHA_NETWORK_FILTER", main)
+        self.assertIn("webRequest.onErrorOccurred", main)
+        self.assertIn("webRequest.onCompleted", main)
+        self.assertIn("[hcaptcha-net] diagnostics-installed", main)
+        self.assertIn("[hcaptcha-net] error target=", main)
+        self.assertIn("[hcaptcha-net] http target=", main)
+        self.assertIn("parsed.pathname", main)
+        self.assertIn("installHCaptchaNetworkDiagnostics(desktopSession)", main)
+        self.assertIn("certificate-error target=${safeNetworkTarget(url)}", main)
+        self.assertNotIn("certificate-error url=${url}", main)
+        diagnostics = main.split("function safeNetworkTarget", 1)[1].split("function createWindow", 1)[0]
+        self.assertNotIn(".search", diagnostics)
+        self.assertNotIn(".searchParams", diagnostics)
+        self.assertNotIn("details.requestHeaders", diagnostics)
+        self.assertNotIn("details.uploadData", diagnostics)
+        self.assertNotIn("details.url}", diagnostics)
+        self.assertIn("callback(false);", main)
+
     def test_guild_navigation_uses_full_document_reload_until_shell_lifecycle_is_complete(self):
         nav = (ROOT / "assets/js/ui/guild-navigation.js").read_text(encoding="utf-8")
         self.assertIn('guildsnav___home', nav)
@@ -74,9 +94,9 @@ class DesktopReliabilityTests(unittest.TestCase):
         self.assertNotIn("markChecked();", before_remote)
         self.assertIn("markChecked();", after_remote)
 
-    def test_desktop_release_version_is_4_3_4(self):
+    def test_desktop_release_version_is_4_3_5(self):
         package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-        self.assertEqual(package["version"], "4.3.4")
+        self.assertEqual(package["version"], "4.3.5")
 
 
 if __name__ == "__main__":
