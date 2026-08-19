@@ -29,13 +29,28 @@ def is_public_manifest_path(path: Path) -> bool:
         return False
     return path.is_file()
 
+LF_TEXT_SUFFIXES = {
+    ".html", ".css", ".js", ".cjs", ".py", ".json", ".yml", ".yaml",
+    ".md", ".txt", ".sql", ".ps1", ".svg", ".example",
+}
+LF_TEXT_NAMES = {".gitattributes", ".gitignore"}
+CRLF_TEXT_SUFFIXES = {".bat"}
+
+
+def canonical_bytes(path: Path) -> bytes:
+    data = path.read_bytes()
+    suffix = path.suffix.lower()
+    if suffix not in LF_TEXT_SUFFIXES and suffix not in CRLF_TEXT_SUFFIXES and path.name not in LF_TEXT_NAMES:
+        return data
+    # Normalize CRLF and lone CR first, then apply the repository EOL policy.
+    data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    if suffix in CRLF_TEXT_SUFFIXES:
+        data = data.replace(b"\n", b"\r\n")
+    return data
+
 
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return hashlib.sha256(canonical_bytes(path)).hexdigest()
 
 
 def main() -> int:
@@ -45,7 +60,7 @@ def main() -> int:
             continue
         relative = path.relative_to(ROOT).as_posix()
         entries.append(f"{sha256(path)}  {relative}")
-    MANIFEST.write_text("\n".join(entries) + "\n", encoding="utf-8")
+    MANIFEST.write_text("\n".join(entries) + "\n", encoding="utf-8", newline="\n")
     print(f"Manifesto publico gerado: {len(entries)} arquivos.")
     return 0
 

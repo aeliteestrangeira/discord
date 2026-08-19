@@ -1,6 +1,6 @@
 {
   "name": "discord-local-desktop",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "private": true,
   "description": "Electron desktop shell for the existing local Flask application.",
   "main": "desktop/main.cjs",

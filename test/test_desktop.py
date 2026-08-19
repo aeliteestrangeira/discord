@@ -89,6 +89,22 @@ class DesktopArchitectureTests(unittest.TestCase):
         self.assertNotIn('type="password"', source)
         self.assertIn("projeto educacional e independente", source)
 
+    def test_pyinstaller_data_sources_are_absolute_before_spec_generation(self):
+        source = (ROOT / "desktop/build_backend.ps1").read_text(encoding="utf-8")
+        self.assertIn("function Data-Argument", source)
+        self.assertIn("[System.IO.Path]::GetFullPath", source)
+        self.assertIn('(Data-Argument "assets" "assets")', source)
+        self.assertNotIn('"--add-data", "assets;assets"', source)
+
+    def test_integrity_hashes_are_eol_canonical(self):
+        generator = (ROOT / "priv/scripts/generate_integrity_manifest.py").read_text(encoding="utf-8")
+        verifier = (ROOT / "verify_integrity.py").read_text(encoding="utf-8")
+        for source in (generator, verifier):
+            self.assertIn("canonical_bytes", source)
+            self.assertIn('CRLF_TEXT_SUFFIXES = {".bat"}', source)
+            self.assertIn('".svg", ".example"', source)
+            self.assertIn('LF_TEXT_NAMES = {".gitattributes", ".gitignore"}', source)
+
 
 if __name__ == "__main__":
     unittest.main()

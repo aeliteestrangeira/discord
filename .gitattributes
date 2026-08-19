@@ -1,4 +1,6 @@
 # Keep source and protected web baselines byte-stable on every platform.
+.gitattributes text eol=lf
+.gitignore text eol=lf
 *.html text eol=lf
 *.css text eol=lf
 *.js text eol=lf
@@ -11,4 +13,6 @@
 *.txt text eol=lf
 *.sql text eol=lf
 *.ps1 text eol=lf
+*.svg text eol=lf
+*.example text eol=lf
 *.bat text eol=crlf

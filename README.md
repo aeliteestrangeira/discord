@@ -203,3 +203,8 @@ A partir da versão desktop alpha, `DESKTOP_START.bat` abre **a mesma aplicaçã
 O renderer Electron opera com Node desabilitado, isolamento de contexto, sandbox, `webSecurity`, bloqueio de novas janelas e política de permissões em default-deny. Apenas acesso ao microfone é permitido para a origem local da aplicação, necessário para o recurso de voz. O certificado local nunca é aceito por bypass; a confiança precisa ser instalada corretamente pelo fluxo TLS já existente.
 
 Esta fase ainda é de desenvolvimento desktop. O instalador público/auto-update por GitHub Releases será adicionado depois que o runtime Python e o diretório persistente `instance/` forem separados do diretório de aplicação.
+
+## Desktop 4.2.2: correcoes de build e integridade multiplataforma
+
+A versao 4.2.2 corrige o empacotamento PyInstaller no GitHub Actions usando caminhos absolutos para todos os `--add-data`, evitando que `--specpath` rebata caminhos relativos para `build/pyinstaller-spec/`. O manifesto `HASHES.sha256` e o verificador agora canonizam finais de linha conforme a politica do repositorio, mantendo verificacao deterministica em clones Linux e Windows sem enfraquecer os hashes de conteudo.
+
