@@ -24,8 +24,8 @@ function Data-Argument([string]$RelativePath, [string]$Destination) {
 
 Push-Location $Root
 try {
-    $common = @(
-        "--noconfirm", "--clean", "--onefile",
+    $backendCommon = @(
+        "--noconfirm", "--clean", "--onedir",
         "--distpath", $Out,
         "--workpath", $Work,
         "--specpath", $Spec
@@ -40,18 +40,28 @@ try {
         "--add-data", (Data-Argument "config\.env.example" "config")
     )
     $AppEntry = Resolve-Source "app.py"
-    & python -m PyInstaller @common @dataArgs --name discord-backend $AppEntry
+    & python -m PyInstaller @backendCommon @dataArgs --name discord-backend $AppEntry
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller falhou para discord-backend." }
 
+    # The long-running backend is intentionally onedir. PyInstaller onefile uses
+    # a parent bootloader plus an application child; terminating only the parent
+    # can leave the actual server alive on Windows. The short-lived TLS helper
+    # remains onefile because it exits before Electron proceeds.
+    $tlsCommon = @(
+        "--noconfirm", "--clean", "--onefile",
+        "--distpath", $Out,
+        "--workpath", $Work,
+        "--specpath", $Spec
+    )
     $TlsEntry = Resolve-Source "priv\scripts\generate_local_tls.py"
-    & python -m PyInstaller @common --name discord-tls $TlsEntry
+    & python -m PyInstaller @tlsCommon --name discord-tls $TlsEntry
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller falhou para discord-tls." }
 
-    foreach ($name in @("discord-backend.exe", "discord-tls.exe")) {
-        $path = Join-Path $Out $name
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Artefato ausente: $path" }
-    }
-    Write-Host "Backend executables ready in $Out"
+    $BackendExe = Join-Path $Out "discord-backend\discord-backend.exe"
+    $TlsExe = Join-Path $Out "discord-tls.exe"
+    if (-not (Test-Path -LiteralPath $BackendExe -PathType Leaf)) { throw "Artefato ausente: $BackendExe" }
+    if (-not (Test-Path -LiteralPath $TlsExe -PathType Leaf)) { throw "Artefato ausente: $TlsExe" }
+    Write-Host "Backend onedir and TLS helper ready in $Out"
 } finally {
     Pop-Location
 }

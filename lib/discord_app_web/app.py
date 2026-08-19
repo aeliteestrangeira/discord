@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import os
 from pathlib import Path
 
+from cheroot import wsgi
+from cheroot.ssl.builtin import BuiltinSSLAdapter
 from flask import Flask
-from hypercorn.asyncio import serve
-from hypercorn.config import Config
 
 from lib.discord_app_web.errors import register_error_handlers
 from lib.discord_app_web.router import register_routes
@@ -28,20 +27,21 @@ def create_app() -> Flask:
 app = create_app()
 
 
-def _server_config(bind: str, port: int, cert_path: Path, key_path: Path) -> Config:
-    config = Config()
-    config.bind = [f"{bind}:{port}"]
-    config.certfile = str(cert_path)
-    config.keyfile = str(key_path)
-    config.accesslog = None
-    config.errorlog = "-"
-    config.loglevel = "WARNING"
-    config.include_server_header = False
-    config.keep_alive_timeout = 5.0
-    config.graceful_timeout = 3.0
-    config.wsgi_max_body_size = int(app.config["MAX_CONTENT_LENGTH"])
-    config.alpn_protocols = ["http/1.1"]
-    return config
+def _server(bind: str, port: int, cert_path: Path, key_path: Path) -> wsgi.Server:
+    server = wsgi.Server(
+        (bind, port),
+        app,
+        numthreads=20,
+        server_name=APP_HOSTNAME,
+        max=40,
+        request_queue_size=64,
+        timeout=10,
+        shutdown_timeout=5,
+        accepted_queue_size=128,
+        accepted_queue_timeout=5,
+    )
+    server.ssl_adapter = BuiltinSSLAdapter(str(cert_path), str(key_path))
+    return server
 
 
 def run() -> None:
@@ -63,7 +63,12 @@ def run() -> None:
     app.config["DESKTOP_INSTANCE_MARKER"] = str(args.instance_marker or "")
     print(f"Login unico HTTPS: https://{APP_HOSTNAME}:{args.port}/", flush=True)
     print(f"Controle protegido HTTPS: https://{APP_HOSTNAME}:{args.port}/admin", flush=True)
-    asyncio.run(serve(app, _server_config(args.bind, args.port, cert_path, key_path), mode="wsgi"))
+    print("Servidor WSGI: Cheroot/TLS", flush=True)
+    server = _server(args.bind, args.port, cert_path, key_path)
+    try:
+        server.start()
+    finally:
+        server.stop()
 
 
 if __name__ == "__main__":

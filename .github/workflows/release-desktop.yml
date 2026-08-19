@@ -54,7 +54,7 @@ jobs:
           if (-not (Test-Path (Join-Path $env:DISCORD_INSTANCE_DIR "tls/server-cert.pem"))) { throw "TLS certificate missing" }
           if (-not (Test-Path (Join-Path $env:DISCORD_INSTANCE_DIR "tls/server-key.pem"))) { throw "TLS key missing" }
 
-      - name: Smoke test packaged WSGI backend
+      - name: Smoke test packaged WSGI backend restart
         shell: pwsh
         run: |
           $instance = Join-Path $env:RUNNER_TEMP "discord-instance"
@@ -69,15 +69,17 @@ jobs:
           $port = 18443
           $cert = Join-Path $instance "tls/server-cert.pem"
           $key = Join-Path $instance "tls/server-key.pem"
-          $stdout = Join-Path $env:RUNNER_TEMP "discord-backend.stdout.log"
-          $stderr = Join-Path $env:RUNNER_TEMP "discord-backend.stderr.log"
-          $args = @(
-            "--bind", "127.0.0.1", "--port", [string]$port,
-            "--tls-cert", $cert, "--tls-key", $key,
-            "--instance-marker", "ci-smoke"
-          )
-          $process = Start-Process -FilePath ./build/backend/discord-backend.exe -ArgumentList $args -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-          try {
+          $backend = Join-Path $PWD "build\backend\discord-backend\discord-backend.exe"
+
+          function Start-And-Verify([string]$marker, [string]$suffix) {
+            $stdout = Join-Path $env:RUNNER_TEMP ("discord-backend-" + $suffix + ".stdout.log")
+            $stderr = Join-Path $env:RUNNER_TEMP ("discord-backend-" + $suffix + ".stderr.log")
+            $args = @(
+              "--bind", "127.0.0.1", "--port", [string]$port,
+              "--tls-cert", $cert, "--tls-key", $key,
+              "--instance-marker", $marker
+            )
+            $process = Start-Process -FilePath $backend -ArgumentList $args -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
             $ready = $false
             for ($i = 0; $i -lt 90; $i++) {
               if ($process.HasExited) {
@@ -89,7 +91,7 @@ jobs:
               if ($LASTEXITCODE -eq 0 -and $body) {
                 try {
                   $json = $body | ConvertFrom-Json
-                  if ($json.ok -eq $true -and $json.service -eq "discord-local" -and $json.marker -eq "ci-smoke") {
+                  if ($json.ok -eq $true -and $json.service -eq "discord-local" -and $json.marker -eq $marker) {
                     $ready = $true
                     break
                   }
@@ -97,13 +99,25 @@ jobs:
               }
               Start-Sleep -Milliseconds 500
             }
-            if (-not $ready) { throw "Packaged WSGI backend did not become healthy." }
-            if (Select-String -LiteralPath $stderr -Pattern "development server" -Quiet -ErrorAction SilentlyContinue) {
-              throw "Werkzeug development server warning detected; production WSGI migration failed."
-            }
-            Write-Host "Packaged Hypercorn WSGI/TLS health check passed."
+            if (-not $ready) { throw "Packaged WSGI backend did not become healthy for marker $marker." }
+            $allLog = ((Get-Content -LiteralPath $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue))
+            if ($allLog -match "development server") { throw "Werkzeug development server warning detected." }
+            if ($allLog -match "UnexpectedMessageError|SSL shutdown timed out") { throw "Async Hypercorn protocol error detected after native WSGI migration." }
+            return $process
+          }
+
+          $first = $null
+          $second = $null
+          try {
+            $first = Start-And-Verify "ci-smoke-1" "first"
+            Stop-Process -Id $first.Id -Force -ErrorAction Stop
+            $first.WaitForExit(10000)
+            Start-Sleep -Milliseconds 750
+            $second = Start-And-Verify "ci-smoke-2" "second"
+            Write-Host "Packaged Cheroot WSGI/TLS restart health check passed."
           } finally {
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+            if ($first -and -not $first.HasExited) { Stop-Process -Id $first.Id -Force -ErrorAction SilentlyContinue }
+            if ($second -and -not $second.HasExited) { Stop-Process -Id $second.Id -Force -ErrorAction SilentlyContinue }
           }
 
       - name: Install desktop dependencies

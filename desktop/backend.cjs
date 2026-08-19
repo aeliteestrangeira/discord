@@ -95,6 +95,47 @@ function run(command, args, { timeoutMs = 0, phase = command, cwd = process.cwd(
   });
 }
 
+function capture(command, args, { timeoutMs = 5000, cwd = process.cwd(), env = process.env } = {}) {
+  return new Promise((resolve, reject) => {
+    const effectiveCwd = path.resolve(cwd || process.cwd());
+    const child = spawn(command, args, {
+      cwd: effectiveCwd,
+      windowsHide: true,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...env }
+    });
+    let stdout = "";
+    let stderr = "";
+    const outDecoder = new StringDecoder("utf8");
+    const errDecoder = new StringDecoder("utf8");
+    child.stdout?.on("data", (chunk) => { stdout += outDecoder.write(chunk); });
+    child.stderr?.on("data", (chunk) => { stderr += errDecoder.write(chunk); });
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill(); } catch (_) {}
+      reject(new Error(`Comando de diagnostico excedeu ${timeoutMs} ms.`));
+    }, timeoutMs);
+    child.once("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("exit", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      stdout += outDecoder.end();
+      stderr += errDecoder.end();
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(`Comando de diagnostico falhou (codigo=${code}): ${stderr.trim()}`));
+    });
+  });
+}
+
 function existingFile(candidate) {
   try {
     return fs.statSync(candidate).isFile();
@@ -260,6 +301,108 @@ function spawnPackagedBackend(executable, args, env, cwd) {
   return child;
 }
 
+function normalizedPath(value) {
+  return path.resolve(String(value || "")).replace(/[\\/]+/g, "\\").toLowerCase();
+}
+
+async function listenerPids(port, cwd) {
+  const netstat = resolveSystem32Executable("netstat.exe");
+  const { stdout } = await capture(netstat, ["-ano", "-p", "TCP"], { cwd, timeoutMs: 5000 });
+  const pids = new Set();
+  for (const raw of stdout.split(/\r?\n/)) {
+    const columns = raw.trim().split(/\s+/);
+    if (columns.length < 5 || columns[0].toUpperCase() !== "TCP") continue;
+    const local = columns[1] || "";
+    const match = local.match(/:(\d+)$/);
+    if (!match || Number(match[1]) !== Number(port)) continue;
+    const pid = Number(columns[columns.length - 1]);
+    if (Number.isInteger(pid) && pid > 0) pids.add(pid);
+  }
+  return [...pids];
+}
+
+async function executablePathForPid(pid, cwd) {
+  const ps = resolveWindowsPowerShell();
+  const command = [
+    "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+    `$p = Get-CimInstance Win32_Process -Filter \"ProcessId = ${pid}\" -ErrorAction SilentlyContinue`,
+    "if ($null -eq $p) { exit 3 }",
+    "[Console]::Write($p.ExecutablePath)"
+  ].join("; ");
+  try {
+    const { stdout } = await capture(ps, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command], { cwd, timeoutMs: 5000 });
+    return stdout.trim();
+  } catch (_) {
+    return "";
+  }
+}
+
+async function forceTerminatePidTree(pid, cwd, phase = "backend-tree-stop") {
+  const taskkill = resolveSystem32Executable("taskkill.exe");
+  await run(taskkill, ["/PID", String(pid), "/T", "/F"], { phase: `${phase}-${pid}`, cwd, timeoutMs: 10000 });
+}
+
+async function reclaimBackendPort(port, trustedExecutablePaths, cwd) {
+  const trusted = new Set(trustedExecutablePaths.map(normalizedPath));
+  let pids = await listenerPids(port, cwd);
+  if (pids.length === 0) return;
+
+  for (const pid of pids) {
+    const executable = await executablePathForPid(pid, cwd);
+    if (!executable || !trusted.has(normalizedPath(executable))) {
+      throw new Error(`Porta ${port} ocupada por processo nao confiavel (PID=${pid}, executavel=${executable || "desconhecido"}).`);
+    }
+    log(`[backend-port] reclaiming trusted stale backend pid=${pid}`);
+    try {
+      await forceTerminatePidTree(pid, cwd, "backend-stale-stop");
+    } catch (error) {
+      const remaining = await listenerPids(port, cwd).catch(() => [pid]);
+      if (remaining.includes(pid)) throw error;
+    }
+  }
+
+  const deadline = Date.now() + 8000;
+  do {
+    pids = await listenerPids(port, cwd);
+    if (pids.length === 0) {
+      log(`[backend-port] port ${port} released`);
+      return;
+    }
+    await sleep(200);
+  } while (Date.now() < deadline);
+  throw new Error(`Porta ${port} continuou ocupada apos encerrar backend antigo.`);
+}
+
+function waitForChildExit(child, timeoutMs) {
+  if (!child || child.exitCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    child.once("exit", () => finish(true));
+  });
+}
+
+async function terminateTrackedBackend(child, cwd) {
+  if (!child || child.exitCode !== null) return;
+  const pid = child.pid;
+  try { child.kill(); } catch (error) { log(`[backend-stop] initial-stop non-fatal: ${error.message}`); }
+  if (await waitForChildExit(child, 3000)) return;
+  if (!pid) return;
+  log(`[backend-stop] forcing process tree pid=${pid}`);
+  try {
+    await forceTerminatePidTree(pid, cwd, "backend-force-stop");
+  } catch (error) {
+    log(`[backend-stop] force-stop non-fatal: ${error.message}`);
+  }
+  await waitForChildExit(child, 2000);
+}
+
 async function preparePackagedRuntime({ resourcesPath, dataRoot }) {
   const paths = dataPaths(dataRoot);
   ensureDataTree(paths);
@@ -271,7 +414,8 @@ async function preparePackagedRuntime({ resourcesPath, dataRoot }) {
   const hostnameScript = path.join(runtimeDir, "ensure_local_hostname.ps1");
   const setupScript = path.join(runtimeDir, "packaged_setup.ps1");
   const tlsExe = path.join(backendDir, "discord-tls.exe");
-  const backendExe = path.join(backendDir, "discord-backend.exe");
+  const backendExe = path.join(backendDir, "discord-backend", "discord-backend.exe");
+  const legacyBackendExe = path.join(backendDir, "discord-backend.exe");
   for (const required of [hostnameScript, setupScript, tlsExe, backendExe]) {
     if (!fs.existsSync(required)) throw new Error(`Recurso do instalador ausente: ${required}`);
   }
@@ -281,9 +425,12 @@ async function preparePackagedRuntime({ resourcesPath, dataRoot }) {
   await run(tlsExe, [], { phase: "local-tls-generate", cwd: dataRoot, env, timeoutMs: 30000 });
   await powershell(setupScript, ["-DataRoot", dataRoot, "-CaPath", paths.ca], "desktop-data-acl-and-trust", { env, cwd: dataRoot });
 
-  if (packagedBackend && !packagedBackend.killed) {
-    try { packagedBackend.kill(); } catch (_) {}
+  if (packagedBackend) {
+    await terminateTrackedBackend(packagedBackend, dataRoot);
+    packagedBackend = null;
   }
+  await reclaimBackendPort(APP_PORT, [backendExe, legacyBackendExe], dataRoot);
+
   const marker = `${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2)}`;
   expectedHealthMarker = marker;
   packagedBackend = spawnPackagedBackend(
@@ -309,6 +456,7 @@ async function prepareLocalRuntime(options = {}) {
 async function waitForBackend(fetchFn, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
+  let markerMismatchLogged = false;
   while (Date.now() < deadline) {
     if (expectedHealthMarker && packagedBackend && packagedBackend.exitCode !== null) {
       throw new Error(`Backend empacotado encerrou antes do health check (codigo=${packagedBackend.exitCode}).`);
@@ -328,14 +476,21 @@ async function waitForBackend(fetchFn, timeoutMs = 30000) {
         const body = await response.json().catch(() => ({}));
         if (body && body.ok === true && body.service === "discord-local") {
           if (expectedHealthMarker && body.marker !== expectedHealthMarker) {
-            lastError = new Error("Health check respondeu de uma instancia antiga do backend.");
+            lastError = new Error("Health check HTTP 200 veio de outra instancia do backend (marker divergente).");
+            if (!markerMismatchLogged) {
+              markerMismatchLogged = true;
+              log(`[health] marker mismatch expected=${String(expectedHealthMarker).slice(0, 18)} actual=${String(body.marker || "").slice(0, 18)}`);
+            }
           } else {
             log("backend health confirmed");
             return;
           }
+        } else {
+          lastError = new Error("Health check HTTP 200 retornou payload inesperado.");
         }
+      } else {
+        lastError = new Error(`Health check HTTP ${response.status}.`);
       }
-      lastError = new Error(`Health check HTTP ${response.status}.`);
     } catch (error) {
       clearTimeout(timer);
       lastError = error;
@@ -350,8 +505,9 @@ async function stopBackend({ packaged = false } = {}) {
   if (packaged) {
     const child = packagedBackend;
     packagedBackend = null;
-    if (!child || child.killed) return;
-    try { child.kill(); } catch (error) { log(`[backend-stop] non-fatal: ${error.message}`); }
+    expectedHealthMarker = null;
+    if (!child) return;
+    await terminateTrackedBackend(child, runtimeRoot);
     return;
   }
   try {
