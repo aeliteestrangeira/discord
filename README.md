@@ -12,7 +12,7 @@ Arquivos protegidos incluem as páginas públicas/autenticadas, templates admini
 
 A aplicação aceita bootstrap privado por `config/SUPABASE_PRIVILEGED.env` e persiste os valores no armazenamento criptografado `instance/control.sqlite3`, protegido por chaves geradas localmente em `instance/`. O bootstrap copia valores ausentes sem apagar nem reescrever o arquivo de origem. Valores já existentes no armazenamento criptografado prevalecem.
 
-**Decisão operacional desta distribuição:** o arquivo `config/SUPABASE_PRIVILEGED.env` permanece no pacote para evitar reentrada manual das credenciais em atualizações. Isso significa que quem obtiver o pacote também obtém essas credenciais; este risco residual é aceito pelo proprietário do pacote. O artefato distribuível, entretanto, não deve carregar `instance/control.sqlite3`, `master.key`, `csrf.key`, `audit.key`, sessões ou estado de runtime. Essas chaves/estado são criados ou preservados localmente na instalação.
+**Limite público da distribuição:** `config/SUPABASE_PRIVILEGED.env` não faz parte do repositório público, do GitHub Pages, das GitHub Releases nem do instalador distribuído a clientes. No ambiente do proprietário/desenvolvimento, o bootstrap privado pode ser importado explicitamente para a árvore persistente e permanece fora do artefato público. O distribuível também não carrega `instance/control.sqlite3`, `master.key`, `csrf.key`, `audit.key`, sessões ou estado de runtime; essas chaves e estados são criados ou preservados localmente.
 
 Variáveis suportadas:
 
@@ -21,7 +21,7 @@ Variáveis suportadas:
 - Cloudinary: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_FOLDER`.
 - Gmail API, ainda opcional/não configurado: remetente, OAuth Client ID, Client Secret e refresh token.
 
-O pacote atual contém a configuração Supabase/hCaptcha/Cloudinary fornecida para esta instalação. Valores ausentes continuam fail-closed até serem configurados. Credenciais Google permanecem opcionais.
+O artefato público contém somente configuração não secreta necessária ao cliente. Valores privilegiados ausentes continuam fail-closed até serem fornecidos no ambiente privado apropriado. Credenciais Google permanecem opcionais.
 
 Segredos nunca devem ser enviados ao navegador, registrados em logs ou adicionados ao manifesto público de integridade.
 
@@ -37,7 +37,7 @@ O runner mantém `app_private.schema_migrations`, compara o SHA-256 do snapshot 
 
 ## hCaptcha
 
-O frontend recebe somente a sitekey. A verificação é executada server-side em `/api/auth/login` e `/api/auth/register`; ausência, erro de transporte ou `success=false` devolvido pelo `siteverify` resultam em negação. O secret permanece apenas no backend/armazenamento protegido. O `hostname` retornado pelo provedor é mantido para auditoria/diagnóstico, mas não transforma localmente um `success=true` em falso negativo. A aplicação protege a origem separadamente por `Host` default-deny e usa apenas `APP_HOSTNAME=discord`. Se a sitekey tiver restrição de domínio habilitada no próprio hCaptcha, o domínio correspondente também precisa aceitar `discord`.
+O frontend recebe somente a sitekey. A verificação é executada server-side em `/api/auth/login` e `/api/auth/register`; ausência, erro de transporte ou `success=false` devolvido pelo `siteverify` resultam em negação. O secret permanece apenas no backend/armazenamento protegido. A partir da 4.3.4, o cliente usa hCaptcha em modo invisível/programático: uma intenção de login dispara `execute()` e erros transitórios `challenge-error`/`internal-error` recebem no máximo uma repetição automática, sem transformar o fluxo em um segundo clique no checkbox. O `hostname` retornado pelo provedor é mantido para auditoria/diagnóstico, mas não transforma localmente um `success=true` em falso negativo. A aplicação protege a origem separadamente por `Host` default-deny e usa apenas `APP_HOSTNAME=discord`. Se a sitekey tiver restrição de domínio habilitada no próprio hCaptcha, o domínio correspondente também precisa aceitar `discord`.
 
 ## DOM e JavaScript
 
@@ -66,7 +66,7 @@ A cópia das imagens de origem para uma migração inicial deve ser mantida fora
 
 ## Administração
 
-Após autenticação administrativa local:
+O plano de controle é operado por um único administrador do proprietário. O provisionamento/reset administrativo não é distribuído no repositório público nem no instalador de clientes; manutenção do proprietário usa ferramenta privada externa, mantida fora do GitHub. Após autenticação administrativa local:
 
 - `/admin` — estado do serviço e auditoria;
 - `/admin/config` — configuração efetiva/mascarada dos provedores;
@@ -90,10 +90,9 @@ Segredos são exibidos apenas de forma mascarada. Campos de substituição vazio
 
 - o shell `/channels/*` não usa mais heartbeat/polling periódico de sessão; remoção local de cookie usa Cookie Store/BroadcastChannel quando disponíveis e validação remota ocorre por eventos reais (`focus`, `pageshow`, `online`, `visibilitychange`) ou por requisições protegidas;
 - pedidos de amizade não fazem refresh periódico: o estado inicial é hidratado server-side e atualizações ocorrem por mutações/foco/visibilidade;
-- navegação entre servidores/canais usa History API + `fetch` same-origin com `X-App-SPA: 1`; não executa `location.assign()` no caminho normal;
-- a barra de servidores (`.wrapper_ef3116`) e o painel persistente de conta/avatar (`section.panels__5e434`) permanecem montados; somente `.sidebarList__5e434`, `.page__5e434`, o título compacto e o indicador ativo são atualizados;
-- em navegação SPA de guild, o backend não recarrega a lista completa de guilds e resolve servidor + canais em uma única conexão PostgreSQL pooled;
-- rotas de guild visitadas podem ser reutilizadas por até 60 segundos em cache de memória do navegador; estado de `/channels/@me` continua sendo reidratado quando necessário.
+- a partir da 4.3.4, transições entre Home, servidores e canais usam navegação documental completa por `location.assign()`, garantindo que toolbar, lista de membros, controladores de rota e DOM sejam hidratados pelo mesmo documento;
+- a antiga substituição parcial com `DOMParser`/`fetch`/History API permanece desabilitada até existir lifecycle explícito `mount/unmount/rehydrate` para todos os componentes persistentes do shell;
+- a otimização de consulta do backend permanece válida: cada documento de guild ainda resolve servidor + canais com o caminho PostgreSQL consolidado.
 
 O polling de `assets/js/ui/voice.js` é separado: ele só existe depois que uma sessão de voz é efetivamente conectada e não participa da validação da sessão web.
 
@@ -134,7 +133,7 @@ Também confirme:
 2. busca por sinks HTML perigosos em JavaScript retorna zero;
 3. existe exatamente um `.sql`, em `priv/supabase/migrations/`;
 4. existe somente `README.md` como Markdown;
-5. `config/SUPABASE_PRIVILEGED.env`, `instance/`, `.runtime/`, caches e segredos não fazem parte do manifesto de hashes público; o bootstrap privado é preservado deliberadamente fora do manifesto;
+5. `config/SUPABASE_PRIVILEGED.env`, `instance/`, `.runtime/`, caches e segredos não fazem parte do repositório/release/manifesto público; bootstrap privado do proprietário é persistido somente fora do artefato distribuído;
 6. testes externos de Supabase/PostgreSQL/hCaptcha/Cloudinary são executados apenas em ambiente com rede e credenciais completas.
 
 ## Dependências e atualizações
@@ -143,13 +142,13 @@ Também confirme:
 
 ## Instalação local
 
-1. `INSTALL_DEPENDENCIES.bat`
-2. `INSTALL_ADMIN.bat`
-3. configure a senha PostgreSQL no administrador ou no bootstrap privado antes de operações de schema;
-4. `SERVER.bat`
+1. `INSTALL_DEPENDENCIES.bat` para desenvolvimento/source;
+2. forneça configuração privilegiada somente por bootstrap privado externo quando estiver operando o ambiente do proprietário;
+3. configure a senha PostgreSQL no plano de controle privado antes de operações de schema;
+4. `SERVER.bat`;
 5. use `PRECHECK.bat` antes da promoção.
 
-Em uma atualização sobre instalação existente, preserve o diretório local `instance/` e o arquivo privado de bootstrap. Em um pacote novo/limpo, somente o bootstrap privado é distribuído; `instance/` é criado no primeiro uso para evitar distribuir chaves, sessões e banco local de outra instalação.
+Clientes do Electron usam o instalador publicado e não criam administradores locais. Provisionamento ou reset do único administrador do proprietário é uma operação de manutenção privada e não possui BAT/Python público no repositório. Em atualizações, preserve a árvore persistente local. Em instalação pública nova, nenhum bootstrap privilegiado é distribuído com o artefato; `instance/` é criado no primeiro uso para evitar distribuir chaves, sessões e banco local de outra instalação.
 
 
 ## Layout Elixir/Phoenix adotado
@@ -217,3 +216,7 @@ Esta mudanca evita tanto falhas `spawn powershell.exe ENOENT` quanto dependencia
 ## Desktop 4.2.4: working directory do runtime empacotado
 
 A versao 4.2.4 corrige uma segunda causa de `ENOENT` observada apenas no aplicativo instalado. O executavel do PowerShell ja era resolvido por caminho absoluto e validado como arquivo existente, mas `child_process.spawn()` ainda herdava `SOURCE_ROOT` como `cwd`. Em um Electron empacotado, esse caminho aponta para dentro de `app.asar`, que nao e um diretorio de trabalho valido para `CreateProcess` no Windows. O runtime agora usa `%LOCALAPPDATA%\AEliteEstrangeira\DiscordDesktop` como `cwd` para os scripts PowerShell empacotados, mantem `SOURCE_ROOT` apenas no modo fonte e valida o `cwd` antes de qualquer spawn para produzir erro diagnostico especifico em vez de um `ENOENT` ambiguo.
+
+## Convergência Web/Desktop planejada
+
+Na linha 4.3.x, o GitHub Pages continua sendo o canal público estático de distribuição/documentação. A convergência da aplicação web real com o Electron fica para a linha 5.x: o mesmo frontend versionado será produzido para Web e Desktop, enquanto autenticação, guilds, administração e operações privilegiadas dependerão de backend HTTPS controlado pelo proprietário. GitHub Pages e o Electron público nunca devem receber `service_role`, senha PostgreSQL, segredo hCaptcha, segredo Cloudinary ou credenciais administrativas.

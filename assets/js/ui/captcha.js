@@ -127,7 +127,7 @@ async function prewarmCaptcha() {
     if (!config?.configured || !config?.sitekey) {
       return { ok: false, reason: "not-configured" };
     }
-    await Promise.all([ensureCaptchaCss(), ensureHCaptchaApi()]);
+    await ensureHCaptchaApi();
     return { ok: true };
   } catch (error) {
     return { ok: false, reason: error?.message || "prewarm-failed" };
@@ -190,140 +190,78 @@ async function requestCaptchaToken() {
     throw new Error(`Abra a aplicação por ${config.localHostname || "o hostname local configurado"} para usar hCaptcha.`);
   }
 
-  const readiness = await Promise.all([ensureCaptchaCss(), ensureHCaptchaApi()]);
-  const api = readiness[1];
-  const layer = captchaLayer();
-  replaceTrustedChildren(layer, captchaModalMarkup());
-  const dialog = layer.querySelector("#app-hcaptcha-dialog");
-  const mount = layer.querySelector("#app-hcaptcha-mount");
-  const close = layer.querySelector('[data-captcha-close="true"]');
-  const message = layer.querySelector('[data-captcha-message="true"]');
-  if (!mount) throw new Error("Contêiner hCaptcha indisponível.");
+  const api = await ensureHCaptchaApi();
+  const mount = document.createElement("div");
+  mount.dataset.appHcaptchaInvisible = "true";
+  document.body.appendChild(mount);
 
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    let widgetId = null;
-    let providerRetryUsed = false;
-    let providerRetryTimer = null;
+  let widgetId = null;
+  const retryableExecutionErrors = new Set(["challenge-error", "internal-error"]);
+  const normalizeProviderCode = (value) => {
+    const raw = typeof value === "string" ? value : (value?.code || value?.name || "unknown");
+    return String(raw || "unknown").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "unknown";
+  };
+  const providerFailure = (code) => {
+    const error = new Error(
+      code === "rate-limited"
+        ? "Muitas tentativas de confirmação. Aguarde um instante e tente novamente."
+        : "Não foi possível concluir a confirmação humana. Tente novamente."
+    );
+    error.code = `hcaptcha_${code}`;
+    return error;
+  };
 
-    const cleanup = () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-      if (providerRetryTimer) {
-        window.clearTimeout(providerRetryTimer);
-        providerRetryTimer = null;
+  try {
+    widgetId = api.render(mount, {
+      sitekey: config.sitekey,
+      size: "invisible",
+      theme: "light",
+      hl: "pt-BR",
+      "error-callback": (value) => {
+        const code = normalizeProviderCode(value);
+        console.warn(`[hcaptcha] provider-error code=${code} mode=invisible`);
+      },
+      "expired-callback": () => {
+        console.warn("[hcaptcha] token-expired mode=invisible");
       }
-      if (widgetId !== null && api?.remove) {
-        try { api.remove(widgetId); } catch (_) {}
-      }
-      layer.replaceChildren();
-      OverlayManager.release("hcaptcha");
-    };
-    const cancel = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(new DOMException("Verificação humana cancelada.", "AbortError"));
-    };
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        cancel();
-      }
-    };
-    OverlayManager.claim({ id: "hcaptcha", type: "modal", close: cancel });
-    close?.addEventListener("click", cancel, { once: true });
-    document.addEventListener("keydown", onKeyDown, true);
+    });
 
-    const nonRecoverableProviderErrors = new Set(["rate-limited", "invalid-data", "script-error"]);
-
-    const renderWidget = ({ continueFlow = false } = {}) => {
-      let currentId = null;
-      currentId = api.render(mount, {
-        sitekey: config.sitekey,
-        theme: "light",
-        hl: "pt-BR",
-        callback: (token) => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          resolve(token);
-        },
-        "expired-callback": () => {
-          if (message) message.textContent = "A confirmação expirou. Marque a caixa novamente.";
-          try { api.reset(currentId); } catch (_) {}
-        },
-        "error-callback": (errorCode) => {
-          const code = String(errorCode || "unknown").trim().toLowerCase() || "unknown";
-          console.warn(`[hcaptcha] provider-error code=${code} recovery=${providerRetryUsed ? "used" : "available"}`);
-          if (settled) return;
-
-          const canRecover = !providerRetryUsed && !nonRecoverableProviderErrors.has(code);
-          if (canRecover) {
-            providerRetryUsed = true;
-            if (message) message.textContent = "Reconectando à confirmação...";
-            providerRetryTimer = window.setTimeout(() => {
-              providerRetryTimer = null;
-              if (settled) return;
-              try {
-                if (currentId !== null && api?.remove) api.remove(currentId);
-              } catch (_) {}
-              if (widgetId === currentId) widgetId = null;
-              mount.replaceChildren();
-              try {
-                widgetId = renderWidget({ continueFlow: true });
-                console.info(`[hcaptcha] provider-recovery code=${code} widget=recreated`);
-              } catch (_) {
-                console.warn(`[hcaptcha] provider-recovery-failed code=${code}`);
-                if (message) message.textContent = "Não foi possível carregar a confirmação. Tente novamente.";
-              }
-            }, 700);
-            return;
-          }
-
-          if (message) {
-            message.textContent = code === "rate-limited"
-              ? "Muitas tentativas de confirmação. Aguarde um instante e tente novamente."
-              : "Não foi possível carregar a confirmação. Tente novamente.";
-          }
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const execution = await api.execute(widgetId, { async: true });
+        const token = String(execution?.response || "").trim();
+        if (!token) throw "missing-token";
+        console.info(`[hcaptcha] invisible-success attempt=${attempt}`);
+        return token;
+      } catch (value) {
+        const code = normalizeProviderCode(value);
+        if (code === "challenge-closed") {
+          console.info("[hcaptcha] challenge-closed mode=invisible");
+          throw new DOMException("Verificação humana cancelada.", "AbortError");
         }
-      });
 
-      if (continueFlow) {
-        window.setTimeout(() => {
-          if (settled || widgetId !== currentId) return;
-          if (!api?.execute) {
-            if (message) message.textContent = "Clique em Sou humano para continuar.";
-            console.warn("[hcaptcha] provider-recovery execute=unavailable");
-            return;
-          }
-          try {
-            const execution = api.execute(currentId, { async: true });
-            Promise.resolve(execution).then(() => {
-              console.info("[hcaptcha] provider-recovery execute=started");
-            }).catch(() => {
-              if (!settled && widgetId === currentId && message) {
-                message.textContent = "Clique em Sou humano para continuar.";
-              }
-              console.warn("[hcaptcha] provider-recovery execute=rejected");
-            });
-          } catch (_) {
-            if (message) message.textContent = "Clique em Sou humano para continuar.";
-            console.warn("[hcaptcha] provider-recovery execute=failed");
-          }
-        }, 200);
+        const canRetry = attempt === 1 && retryableExecutionErrors.has(code);
+        if (!canRetry) {
+          console.warn(`[hcaptcha] invisible-failed code=${code} attempt=${attempt}`);
+          throw providerFailure(code);
+        }
+
+        // hCaptcha documents challenge-error/internal-error in fully programmatic
+        // invisible mode as retryable by invoking execute again. The retry is
+        // automatic so one user login intent never turns into a second checkbox click.
+        console.warn(`[hcaptcha] invisible-retry code=${code} attempt=${attempt}`);
+        try { api.reset(widgetId); } catch (_) {}
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
       }
-      return currentId;
-    };
-
-    try {
-      widgetId = renderWidget();
-      requestAnimationFrame(() => dialog?.focus({ preventScroll: true }));
-    } catch (error) {
-      settled = true;
-      cleanup();
-      reject(error);
     }
-  });
+
+    throw providerFailure("unknown");
+  } finally {
+    if (widgetId !== null && api?.remove) {
+      try { api.remove(widgetId); } catch (_) {}
+    }
+    mount.remove();
+  }
 }
 
 
