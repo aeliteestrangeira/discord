@@ -77,9 +77,43 @@ function run(command, args, { timeoutMs = 0, phase = command, cwd = SOURCE_ROOT,
   });
 }
 
+function existingFile(candidate) {
+  try {
+    return fs.statSync(candidate).isFile();
+  } catch (_) {
+    return false;
+  }
+}
+
+function windowsRoot(env = process.env) {
+  return env.SystemRoot || env.WINDIR || "C:\\Windows";
+}
+
+function resolveSystem32Executable(name, env = process.env) {
+  const candidate = path.join(windowsRoot(env), "System32", name);
+  if (!existingFile(candidate)) {
+    throw new Error(`Executavel confiavel do Windows nao encontrado: ${candidate}`);
+  }
+  return candidate;
+}
+
+function resolveWindowsPowerShell(env = process.env) {
+  const candidates = [
+    path.join(windowsRoot(env), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+  ];
+  const programFiles = env.ProgramFiles;
+  if (programFiles) candidates.push(path.join(programFiles, "PowerShell", "7", "pwsh.exe"));
+  for (const candidate of candidates) {
+    if (existingFile(candidate)) return candidate;
+  }
+  throw new Error(`PowerShell confiavel nao encontrado nos caminhos do sistema: ${candidates.join(", ")}`);
+}
+
 function powershell(script, extraArgs = [], phase = path.basename(script), options = {}) {
+  const effectiveEnv = { ...process.env, ...(options.env || {}) };
+  const executable = resolveWindowsPowerShell(effectiveEnv);
   return run(
-    "powershell.exe",
+    executable,
     ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, ...extraArgs],
     { phase, ...options }
   );
@@ -92,7 +126,7 @@ function devPython() {
 async function ensurePythonEnvironment() {
   const python = devPython();
   if (fs.existsSync(python)) return;
-  await run("cmd.exe", ["/d", "/s", "/c", "call INSTALL_DEPENDENCIES.bat"], {
+  await run(resolveSystem32Executable("cmd.exe"), ["/d", "/s", "/c", "call INSTALL_DEPENDENCIES.bat"], {
     phase: "python-dependencies"
   });
   if (!fs.existsSync(python)) {

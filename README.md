@@ -208,3 +208,8 @@ Esta fase ainda é de desenvolvimento desktop. O instalador público/auto-update
 
 A versao 4.2.2 corrige o empacotamento PyInstaller no GitHub Actions usando caminhos absolutos para todos os `--add-data`, evitando que `--specpath` rebata caminhos relativos para `build/pyinstaller-spec/`. O manifesto `HASHES.sha256` e o verificador agora canonizam finais de linha conforme a politica do repositorio, mantendo verificacao deterministica em clones Linux e Windows sem enfraquecer os hashes de conteudo.
 
+## Desktop 4.2.3: runtime Windows PowerShell
+
+A versao 4.2.3 corrige a inicializacao do instalador em maquinas nas quais `powershell.exe` nao esta resolvivel pelo `PATH` herdado pelo Electron. O desktop empacotado agora resolve o Windows PowerShell por caminho absoluto confiavel em `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`, com fallback controlado para PowerShell 7 em `%ProgramFiles%\PowerShell\7\pwsh.exe`. O fluxo de elevacao do hostname reutiliza o proprio executavel PowerShell ja em execucao, evitando uma segunda resolucao via `PATH`. Ferramentas do sistema usadas no bootstrap (`cmd.exe`, `icacls.exe` e `ipconfig.exe`) tambem sao resolvidas por caminhos do Windows quando aplicavel.
+
+Esta mudanca evita tanto falhas `spawn powershell.exe ENOENT` quanto dependencia desnecessaria de caminhos pesquisaveis controlados pelo usuario.

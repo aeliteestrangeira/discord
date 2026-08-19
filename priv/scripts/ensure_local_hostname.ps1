@@ -29,6 +29,14 @@ function Test-IsAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-CurrentPowerShellExecutable {
+    $candidate = (Get-Process -Id $PID -ErrorAction Stop).Path
+    if ([string]::IsNullOrWhiteSpace($candidate) -or -not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        throw "Executavel PowerShell atual nao pode ser determinado com seguranca."
+    }
+    return [System.IO.Path]::GetFullPath($candidate)
+}
+
 function Get-HostTokens([string]$Line) {
     $body = ($Line -split '#', 2)[0].Trim()
     if (-not $body) { return @() }
@@ -110,7 +118,10 @@ function Update-HostsFile {
         }
     }
 
-    try { & ipconfig /flushdns | Out-Null } catch { }
+    $ipconfig = Join-Path $env:SystemRoot "System32\ipconfig.exe"
+    try {
+        if (Test-Path -LiteralPath $ipconfig -PathType Leaf) { & $ipconfig /flushdns | Out-Null }
+    } catch { }
     if (-not (Test-CanonicalMapping)) {
         throw "A gravacao terminou, mas a entrada 127.0.0.1 discord nao foi confirmada no arquivo hosts."
     }
@@ -127,7 +138,8 @@ try {
         Write-SetupLog "Configurando o hostname local unico: 127.0.0.1 discord"
         $argLine = '-NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Elevated -LogPath "' + $LogPath + '"'
         try {
-            $proc = Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argLine -Wait -PassThru
+            $powershellExe = Get-CurrentPowerShellExecutable
+            $proc = Start-Process -FilePath $powershellExe -Verb RunAs -ArgumentList $argLine -Wait -PassThru
         } catch {
             throw "Elevacao UAC cancelada ou indisponivel: $($_.Exception.Message)"
         }

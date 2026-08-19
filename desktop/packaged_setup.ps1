@@ -9,6 +9,8 @@ $root = [System.IO.Path]::GetFullPath($DataRoot)
 $instance = Join-Path $root "instance"
 $config = Join-Path $root "config"
 $runtime = Join-Path $root "runtime"
+$icacls = Join-Path $env:SystemRoot "System32\icacls.exe"
+if (-not (Test-Path -LiteralPath $icacls -PathType Leaf)) { throw "icacls.exe do Windows nao encontrado: $icacls" }
 foreach ($dir in @($root, $instance, $config, $runtime)) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
@@ -18,17 +20,17 @@ if (-not $identity.User) { throw "SID do usuario atual indisponivel." }
 $userSid = $identity.User.Value
 $systemSid = "S-1-5-18"
 
-& icacls $root /grant:r "*${userSid}:(OI)(CI)F" "*${systemSid}:(OI)(CI)F" /inheritance:r /Q | Out-Null
+& $icacls $root /grant:r "*${userSid}:(OI)(CI)F" "*${systemSid}:(OI)(CI)F" /inheritance:r /Q | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Falha ao proteger o diretorio persistente do desktop." }
 $children = @(Get-ChildItem -LiteralPath $root -Force -ErrorAction Stop)
 foreach ($child in $children) {
-    & icacls $child.FullName /reset /T /C /Q | Out-Null
+    & $icacls $child.FullName /reset /T /C /Q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Falha ao propagar ACL para $($child.FullName)." }
 }
 
 $privateEnv = Join-Path $config "SUPABASE_PRIVILEGED.env"
 if (Test-Path -LiteralPath $privateEnv -PathType Leaf) {
-    & icacls $privateEnv /grant:r "*${userSid}:F" "*${systemSid}:F" /inheritance:r /Q | Out-Null
+    & $icacls $privateEnv /grant:r "*${userSid}:F" "*${systemSid}:F" /inheritance:r /Q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Falha ao proteger o bootstrap privado persistente." }
 }
 

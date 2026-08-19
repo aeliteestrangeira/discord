@@ -96,6 +96,20 @@ class DesktopArchitectureTests(unittest.TestCase):
         self.assertIn('(Data-Argument "assets" "assets")', source)
         self.assertNotIn('"--add-data", "assets;assets"', source)
 
+
+    def test_packaged_runtime_uses_trusted_absolute_windows_tool_paths(self):
+        backend = (ROOT / "desktop/backend.cjs").read_text(encoding="utf-8")
+        hostname = (ROOT / "priv/scripts/ensure_local_hostname.ps1").read_text(encoding="utf-8")
+        setup = (ROOT / "desktop/packaged_setup.ps1").read_text(encoding="utf-8")
+        self.assertIn("function resolveWindowsPowerShell", backend)
+        self.assertIn('"WindowsPowerShell", "v1.0", "powershell.exe"', backend)
+        self.assertIn("function resolveSystem32Executable", backend)
+        self.assertNotIn('run(\n    "powershell.exe"', backend)
+        self.assertIn("Get-CurrentPowerShellExecutable", hostname)
+        self.assertIn("Get-Process -Id $PID", hostname)
+        self.assertNotIn('Start-Process -FilePath "powershell.exe"', hostname)
+        self.assertIn('System32\\icacls.exe', setup)
+
     def test_integrity_hashes_are_eol_canonical(self):
         generator = (ROOT / "priv/scripts/generate_integrity_manifest.py").read_text(encoding="utf-8")
         verifier = (ROOT / "verify_integrity.py").read_text(encoding="utf-8")
