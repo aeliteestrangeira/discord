@@ -1,0 +1,14 @@
+# Keep source and protected web baselines byte-stable on every platform.
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.cjs text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.sql text eol=lf
+*.ps1 text eol=lf
+*.bat text eol=crlf

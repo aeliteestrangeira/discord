@@ -993,8 +993,10 @@ class ArchitectureTests(unittest.TestCase):
     def test_private_bootstrap_and_admin_store_contract_include_current_providers(self):
         bootstrap = (APP_LIB / "bootstrap.py").read_text(encoding="utf-8")
         cloud = (APP_LIB / "cloudinary_service.py").read_text(encoding="utf-8")
-        env_path = ROOT / "config" / "SUPABASE_PRIVILEGED.env"
-        self.assertTrue(env_path.is_file())
+        private_env = ROOT / "config" / "SUPABASE_PRIVILEGED.env"
+        public_contract = ROOT / "config" / ".env.example"
+        env_path = private_env if private_env.is_file() else public_contract
+        self.assertTrue(env_path.is_file(), "provider configuration contract is missing")
         names = set()
         for raw in env_path.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
@@ -1035,7 +1037,10 @@ class ArchitectureTests(unittest.TestCase):
     def test_host_header_is_canonical_and_hcaptcha_does_not_override_siteverify(self):
         app_source = web_source()
         captcha_source = (APP_LIB / "hcaptcha_service.py").read_text(encoding="utf-8")
-        config = (ROOT / "config" / ".env").read_text(encoding="utf-8")
+        local_config = ROOT / "config" / ".env"
+        public_contract = ROOT / "config" / ".env.example"
+        config_path = local_config if local_config.is_file() else public_contract
+        config = config_path.read_text(encoding="utf-8")
         self.assertIn("def reject_untrusted_host", app_source)
         self.assertIn('ALLOWED_HOSTS = frozenset({APP_HOSTNAME})', app_source)
         self.assertIn('APP_HOSTNAME=discord', config)

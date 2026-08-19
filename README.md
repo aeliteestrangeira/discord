@@ -203,36 +203,3 @@ A partir da versão desktop alpha, `DESKTOP_START.bat` abre **a mesma aplicaçã
 O renderer Electron opera com Node desabilitado, isolamento de contexto, sandbox, `webSecurity`, bloqueio de novas janelas e política de permissões em default-deny. Apenas acesso ao microfone é permitido para a origem local da aplicação, necessário para o recurso de voz. O certificado local nunca é aceito por bypass; a confiança precisa ser instalada corretamente pelo fluxo TLS já existente.
 
 Esta fase ainda é de desenvolvimento desktop. O instalador público/auto-update por GitHub Releases será adicionado depois que o runtime Python e o diretório persistente `instance/` forem separados do diretório de aplicação.
-
-## Desktop 4.2.0: instalador, GitHub Pages e atualizacao
-
-A versao 4.2.0 adiciona a camada de distribuicao sem transformar o GitHub Pages em backend da aplicacao. O site publico fica em `site/` e serve somente como pagina de distribuicao/documentacao. A aplicacao autenticada continua executando localmente via Flask em `https://discord:8000/` dentro do Electron.
-
-### Persistencia fora do diretorio do programa
-
-No instalador, dados mutaveis ficam em `%LOCALAPPDATA%\AEliteEstrangeira\DiscordDesktop\`:
-
-- `instance/`: banco de controle, chaves, TLS e estado local;
-- `config/SUPABASE_PRIVILEGED.env`: bootstrap privado opcional;
-- `runtime/`: logs e estado operacional;
-- `electron/`: perfil do Chromium/Electron e cookies.
-
-Esses caminhos sao fornecidos ao backend por `DISCORD_INSTANCE_DIR`, `DISCORD_RUNTIME_DIR`, `DISCORD_PRIVATE_CONFIG_DIR` e `DISCORD_PRIVATE_ENV_FILE`. Portanto uma atualizacao do executavel nao substitui os dados persistentes.
-
-Quem vem da Desktop Alpha deve executar `MIGRATE_ALPHA_DATA.bat` **na pasta antiga que contem `instance/` e `config/SUPABASE_PRIVILEGED.env`** antes de instalar a versao distribuida. O script copia os dados sem remover os originais e nao sobrescreve um bootstrap privado persistente que ja exista.
-
-### Build do Windows
-
-O workflow `.github/workflows/release-desktop.yml` cria dois executaveis Python com PyInstaller (`discord-backend.exe` e `discord-tls.exe`), empacota o Electron com NSIS e publica no GitHub Release o instalador, metadados de atualizacao (`latest.yml`/blockmap) e `SHA256SUMS.txt`.
-
-O Electron usa `electron-updater` com o provedor GitHub. Nao existe polling periodico: na inicializacao, uma verificacao e feita somente se a ultima verificacao ocorreu ha pelo menos seis horas; tambem existe API desktop para verificacao manual. Downloads de atualizacao ocorrem apenas quando uma versao nova e encontrada.
-
-### GitHub Pages
-
-`.github/workflows/pages.yml` publica exclusivamente `site/`. Antes do primeiro deploy, em **Repository Settings > Pages > Build and deployment > Source**, selecione **GitHub Actions**. O endereco esperado e `https://aeliteestrangeira.github.io/discord/`.
-
-O Pages nao recebe formulários de login nem executa o backend Flask. Ele aponta para GitHub Releases e tenta resolver o instalador x64 mais recente pela API publica do GitHub.
-
-### Assinatura de codigo
-
-A pipeline atual gera um instalador Windows funcional, mas sem certificado de code signing configurado. Antes de tratar o canal como distribuicao de alta confianca, configure um certificado de assinatura no GitHub Actions e remova `CSC_IDENTITY_AUTO_DISCOVERY=false` da etapa de build, substituindo-o pelo mecanismo de assinatura escolhido. As chaves/certificados de assinatura nunca devem ser versionados no repositorio.
