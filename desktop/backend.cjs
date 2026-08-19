@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { StringDecoder } = require("node:string_decoder");
 const { setTimeout: sleep } = require("node:timers/promises");
 const { APP_PORT, HEALTH_URL } = require("./constants.cjs");
 
@@ -11,6 +12,7 @@ const SOURCE_ROOT = path.resolve(__dirname, "..");
 let runtimeRoot = path.join(SOURCE_ROOT, ".runtime");
 let logPath = path.join(runtimeRoot, "desktop.log");
 let packagedBackend = null;
+let expectedHealthMarker = null;
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -52,8 +54,10 @@ function run(command, args, { timeoutMs = 0, phase = command, cwd = process.cwd(
 
     let stdout = "";
     let stderr = "";
-    child.stdout?.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
-    child.stderr?.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    const stdoutDecoder = new StringDecoder("utf8");
+    const stderrDecoder = new StringDecoder("utf8");
+    child.stdout?.on("data", (chunk) => { stdout += stdoutDecoder.write(chunk); });
+    child.stderr?.on("data", (chunk) => { stderr += stderrDecoder.write(chunk); });
 
     let timer = null;
     let settled = false;
@@ -77,6 +81,8 @@ function run(command, args, { timeoutMs = 0, phase = command, cwd = process.cwd(
     });
 
     child.once("exit", (code, signal) => {
+      stdout += stdoutDecoder.end();
+      stderr += stderrDecoder.end();
       if (stdout.trim()) log(`[${phase}] stdout: ${stdout.trim()}`);
       if (stderr.trim()) log(`[${phase}] stderr: ${stderr.trim()}`);
       if (code === 0) {
@@ -196,11 +202,14 @@ function packagedEnv(paths) {
     DISCORD_RUNTIME_DIR: paths.runtime,
     DISCORD_PRIVATE_CONFIG_DIR: paths.config,
     DISCORD_PRIVATE_ENV_FILE: paths.privateEnv,
-    DISCORD_DESKTOP_PACKAGED: "1"
+    DISCORD_DESKTOP_PACKAGED: "1",
+    PYTHONUTF8: "1",
+    PYTHONIOENCODING: "utf-8"
   };
 }
 
 async function prepareSourceRuntime() {
+  expectedHealthMarker = null;
   setLogRoot(path.join(SOURCE_ROOT, ".runtime"));
   log("desktop bootstrap begin mode=source");
   await ensurePythonEnvironment();
@@ -216,6 +225,26 @@ async function prepareSourceRuntime() {
   return { mode: "source", paths: dataPaths(SOURCE_ROOT) };
 }
 
+function logUtf8Lines(stream, prefix) {
+  if (!stream) return;
+  const decoder = new StringDecoder("utf8");
+  let pending = "";
+  const consume = (text) => {
+    pending += text;
+    const lines = pending.split(/\r?\n/);
+    pending = lines.pop() || "";
+    for (const line of lines) {
+      if (line) log(`${prefix}: ${line}`);
+    }
+  };
+  stream.on("data", (chunk) => consume(decoder.write(chunk)));
+  stream.on("end", () => {
+    consume(decoder.end());
+    if (pending) log(`${prefix}: ${pending}`);
+    pending = "";
+  });
+}
+
 function spawnPackagedBackend(executable, args, env, cwd) {
   const child = spawn(executable, args, {
     cwd,
@@ -224,8 +253,8 @@ function spawnPackagedBackend(executable, args, env, cwd) {
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, ...env }
   });
-  child.stdout?.on("data", (chunk) => log(`[backend] stdout: ${chunk.toString("utf8").trimEnd()}`));
-  child.stderr?.on("data", (chunk) => log(`[backend] stderr: ${chunk.toString("utf8").trimEnd()}`));
+  logUtf8Lines(child.stdout, "[backend] stdout");
+  logUtf8Lines(child.stderr, "[backend] stderr");
   child.once("error", (error) => log(`[backend] spawn-error: ${error.message}`));
   child.once("exit", (code, signal) => log(`[backend] exit code=${code} signal=${signal || "none"}`));
   return child;
@@ -256,6 +285,7 @@ async function preparePackagedRuntime({ resourcesPath, dataRoot }) {
     try { packagedBackend.kill(); } catch (_) {}
   }
   const marker = `${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  expectedHealthMarker = marker;
   packagedBackend = spawnPackagedBackend(
     backendExe,
     ["--bind", "127.0.0.1", "--port", String(APP_PORT), "--tls-cert", paths.cert, "--tls-key", paths.key, "--instance-marker", marker],
@@ -280,6 +310,9 @@ async function waitForBackend(fetchFn, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   while (Date.now() < deadline) {
+    if (expectedHealthMarker && packagedBackend && packagedBackend.exitCode !== null) {
+      throw new Error(`Backend empacotado encerrou antes do health check (codigo=${packagedBackend.exitCode}).`);
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2500);
     try {
@@ -294,8 +327,12 @@ async function waitForBackend(fetchFn, timeoutMs = 30000) {
       if (response.ok) {
         const body = await response.json().catch(() => ({}));
         if (body && body.ok === true && body.service === "discord-local") {
-          log("backend health confirmed");
-          return;
+          if (expectedHealthMarker && body.marker !== expectedHealthMarker) {
+            lastError = new Error("Health check respondeu de uma instancia antiga do backend.");
+          } else {
+            log("backend health confirmed");
+            return;
+          }
         }
       }
       lastError = new Error(`Health check HTTP ${response.status}.`);

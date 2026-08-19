@@ -25,6 +25,14 @@ from lib.discord_app_web.security import (
 
 def api_passkey_options():
     require_browser_csrf()
+    try:
+        settings = provider.public_auth_settings()
+    except ProviderError as exc:
+        audit("anonymous", None, "auth.passkey.options", "unavailable", target="supabase-auth", details={"provider_code": exc.code, "phase": "capability"})
+        return jsonify({"configured": provider.public_configured, "ok": False, "error": {"code": "passkey_capability_unavailable", "message": "Chaves de acesso indisponíveis no momento."}}), 200
+    if settings.get("passkeys_enabled") is not True:
+        audit("anonymous", None, "auth.passkey.options", "disabled", target="supabase-auth", details={"phase": "capability"})
+        return jsonify({"configured": provider.public_configured, "ok": False, "error": {"code": "passkey_disabled", "message": "Chaves de acesso não estão habilitadas neste projeto."}}), 200
     rate_bucket = f"passkey-options:{request.remote_addr or 'unknown'}"
     if not store.allow_rate(rate_bucket, limit=30, window_seconds=300):
         audit("anonymous", None, "auth.passkey.options", "rate_limited", target="supabase-auth")

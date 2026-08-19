@@ -1,20 +1,26 @@
-from flask import jsonify, redirect, send_from_directory, url_for
+from flask import current_app, jsonify, redirect, send_from_directory, url_for
 from lib.discord_app_web.runtime import STATIC_PAGES_DIR
+
 
 def home():
     return send_from_directory(STATIC_PAGES_DIR, "login.html")
 
+
 def login_page_legacy():
     return redirect(url_for("home"), code=302)
+
 
 def login_page_alias():
     return redirect(url_for("home"), code=302)
 
+
 def register_page():
     return send_from_directory(STATIC_PAGES_DIR, "register.html")
 
+
 def desktop_health():
-    return jsonify(ok=True, service="discord-local")
+    marker = str(current_app.config.get("DESKTOP_INSTANCE_MARKER", "") or "")
+    return jsonify(ok=True, service="discord-local", marker=marker)
 
 
 def register_routes(app) -> None:

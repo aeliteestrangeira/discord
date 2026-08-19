@@ -55,7 +55,7 @@ function createWindow() {
   hardenWebContents(win.webContents);
   win.once("ready-to-show", () => win.show());
   win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-    if (!isMainFrame) return;
+    if (!isMainFrame || errorCode === -3) return;
     log(`did-fail-load ${errorCode} ${errorDescription} ${validatedURL}`);
   });
   win.webContents.on("render-process-gone", (_event, details) => {

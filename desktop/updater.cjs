@@ -11,6 +11,7 @@ let downloaded = false;
 let mainWindow = null;
 let stateFile = null;
 let log = () => {};
+let lastProgressBucket = -1;
 
 function readState() {
   if (!stateFile) return {};
@@ -73,15 +74,20 @@ function initializeUpdater({ window, dataRoot, logger }) {
   });
   autoUpdater.on("update-available", async (info) => {
     markChecked();
+    lastProgressBucket = -1;
     log(`[updater] available ${info?.version || "unknown"}`);
     try { await autoUpdater.downloadUpdate(); } catch (error) { log(`[updater] download-error: ${error.message}`); }
   });
   autoUpdater.on("download-progress", (progress) => {
-    const pct = Number(progress?.percent || 0).toFixed(1);
-    log(`[updater] download ${pct}%`);
+    const raw = Math.max(0, Math.min(100, Number(progress?.percent || 0)));
+    const bucket = raw >= 100 ? 100 : Math.floor(raw / 5) * 5;
+    if (bucket <= lastProgressBucket) return;
+    lastProgressBucket = bucket;
+    log(`[updater] download ${bucket}%`);
   });
   autoUpdater.on("update-downloaded", (info) => {
     downloaded = true;
+    lastProgressBucket = 100;
     log(`[updater] downloaded ${info?.version || "unknown"}`);
     void promptRestart(info);
   });
