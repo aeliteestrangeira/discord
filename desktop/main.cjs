@@ -126,7 +126,7 @@ async function startDesktop() {
 
     if (app.isPackaged) {
       initializeUpdater({ window: mainWindow, dataRoot, logger: log });
-      void checkForUpdates({ manual: false });
+      void checkForUpdates({ manual: false, startup: true });
     }
     log(`desktop ready mode=${runtime.mode} version=${app.getVersion()}`);
   } catch (error) {

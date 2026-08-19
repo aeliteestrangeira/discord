@@ -3,11 +3,18 @@ import { State } from "./state.js";
 
 let booted = false;
 
+function prewarmHumanVerification() {
+  void import("./captcha.js")
+    .then(({ prewarmCaptcha }) => prewarmCaptcha())
+    .catch(() => {});
+}
+
 async function bootLogin() {
   const { wireForgotPassword, wireLoginForm, wirePasskeyLogin } = await import("./login.js");
   const loginErrors = wireLoginForm();
   wireForgotPassword(loginErrors);
   wirePasskeyLogin();
+  prewarmHumanVerification();
 }
 
 async function bootRegister() {
@@ -23,6 +30,7 @@ async function bootRegister() {
   validationModule.wireMarketingCheckbox();
   const dateState = dateModule.wireDateOfBirth();
   formModule.wireRegisterForm(dateState, registerValidation);
+  prewarmHumanVerification();
 }
 
 async function bootChannels() {

@@ -94,12 +94,15 @@ function initializeUpdater({ window, dataRoot, logger }) {
   autoUpdater.on("error", (error) => log(`[updater] error: ${error.message}`));
 }
 
-async function checkForUpdates({ manual = false } = {}) {
+async function checkForUpdates({ manual = false, startup = false } = {}) {
   if (!initialized) return { ok: false, reason: "not-initialized" };
-  if (!manual && !checkDue()) return { ok: true, skipped: "interval" };
+  if (!manual && !startup && !checkDue()) return { ok: true, skipped: "interval" };
   try {
-    markChecked();
+    if (startup) log("[updater] startup-check");
     const result = await autoUpdater.checkForUpdates();
+    // Only a successful remote check advances the interval state. A failed
+    // request must never suppress the next startup's N -> N+1 check.
+    markChecked();
     return { ok: true, version: result?.updateInfo?.version || null };
   } catch (error) {
     log(`[updater] check-error: ${error.message}`);

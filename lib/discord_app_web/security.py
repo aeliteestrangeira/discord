@@ -280,7 +280,7 @@ def security_headers(response):
     )
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    if request.path.endswith((".html", ".js")) or request.path.startswith(("/api/", "/admin", "/channels")):
+    if request.path.endswith((".html", ".js", ".css")) or request.path.startswith(("/api/", "/admin", "/channels")):
         response.headers["Cache-Control"] = "no-store"
     return response
 

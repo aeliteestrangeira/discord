@@ -2,15 +2,45 @@ import { OverlayManager } from "./overlay-manager.js";
 import { replaceTrustedChildren } from "./dom.js";
 
 let captchaConfigPromise;
+let captchaCssPromise;
 let hcaptchaApiPromise;
+const HCAPTCHA_ONLOAD_CALLBACK = "__discordHCaptchaReady";
 
 function ensureCaptchaCss() {
-  if (document.querySelector('link[data-app-captcha-css="true"]')) return;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = "captcha.css";
-  link.dataset.appCaptchaCss = "true";
-  document.head.appendChild(link);
+  const existing = document.querySelector('link[data-app-captcha-css="true"]');
+  if (existing?.sheet) return Promise.resolve(existing);
+  if (captchaCssPromise) return captchaCssPromise;
+
+  captchaCssPromise = new Promise((resolve, reject) => {
+    const link = existing || document.createElement("link");
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve(link);
+    };
+    const fail = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Falha ao carregar o estilo da verificacao humana."));
+    };
+
+    link.addEventListener("load", finish, { once: true });
+    link.addEventListener("error", fail, { once: true });
+
+    if (!existing) {
+      link.rel = "stylesheet";
+      link.href = "captcha.css";
+      link.dataset.appCaptchaCss = "true";
+      document.head.appendChild(link);
+    }
+    if (link.sheet) finish();
+  }).catch((error) => {
+    captchaCssPromise = undefined;
+    throw error;
+  });
+
+  return captchaCssPromise;
 }
 
 async function getCaptchaConfig() {
@@ -21,8 +51,11 @@ async function getCaptchaConfig() {
       headers: { "Accept": "application/json" }
     }).then(async (response) => {
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error("Falha ao carregar a verificação humana.");
+      if (!response.ok) throw new Error("Falha ao carregar a verificacao humana.");
       return body;
+    }).catch((error) => {
+      captchaConfigPromise = undefined;
+      throw error;
     });
   }
   return captchaConfigPromise;
@@ -31,29 +64,74 @@ async function getCaptchaConfig() {
 function ensureHCaptchaApi() {
   if (window.hcaptcha?.render) return Promise.resolve(window.hcaptcha);
   if (hcaptchaApiPromise) return hcaptchaApiPromise;
+
   hcaptchaApiPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-app-hcaptcha="true"]');
-    if (existing) {
-      existing.addEventListener("load", () => resolve(window.hcaptcha), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Falha ao carregar hCaptcha.")), { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://js.hcaptcha.com/1/api.js?hl=pt-BR&render=explicit";
-    script.async = true;
-    script.defer = true;
-    script.dataset.appHcaptcha = "true";
-    script.addEventListener("load", () => {
+    let settled = false;
+    let timer = null;
+    let script = document.querySelector('script[data-app-hcaptcha="true"]');
+
+    const clearReadyCallback = () => {
+      if (window[HCAPTCHA_ONLOAD_CALLBACK] === ready) {
+        try { delete window[HCAPTCHA_ONLOAD_CALLBACK]; } catch (_) {
+          window[HCAPTCHA_ONLOAD_CALLBACK] = undefined;
+        }
+      }
+    };
+    const succeed = () => {
+      if (settled) return;
+      settled = true;
+      if (timer) window.clearTimeout(timer);
+      clearReadyCallback();
       if (!window.hcaptcha?.render) {
-        reject(new Error("hCaptcha indisponível."));
+        reject(new Error("hCaptcha indisponivel apos inicializacao."));
         return;
       }
       resolve(window.hcaptcha);
-    }, { once: true });
-    script.addEventListener("error", () => reject(new Error("Falha ao carregar hCaptcha.")), { once: true });
-    document.head.appendChild(script);
+    };
+    const fail = () => {
+      if (settled) return;
+      settled = true;
+      if (timer) window.clearTimeout(timer);
+      clearReadyCallback();
+      reject(new Error("Falha ao carregar hCaptcha."));
+    };
+    const ready = () => succeed();
+
+    // For explicit rendering, readiness is the SDK onload callback. A DOM
+    // script-load event alone is not sufficient evidence that render is ready.
+    window[HCAPTCHA_ONLOAD_CALLBACK] = ready;
+
+    if (!script) {
+      script = document.createElement("script");
+      script.src = `https://js.hcaptcha.com/1/api.js?hl=pt-BR&render=explicit&recaptchacompat=off&onload=${encodeURIComponent(HCAPTCHA_ONLOAD_CALLBACK)}`;
+      script.async = true;
+      script.defer = true;
+      script.dataset.appHcaptcha = "true";
+      document.head.appendChild(script);
+    }
+
+    script.addEventListener("error", fail, { once: true });
+    timer = window.setTimeout(fail, 20000);
+  }).catch((error) => {
+    hcaptchaApiPromise = undefined;
+    document.querySelector('script[data-app-hcaptcha="true"]')?.remove();
+    throw error;
   });
+
   return hcaptchaApiPromise;
+}
+
+async function prewarmCaptcha() {
+  try {
+    const config = await getCaptchaConfig();
+    if (!config?.configured || !config?.sitekey) {
+      return { ok: false, reason: "not-configured" };
+    }
+    await Promise.all([ensureCaptchaCss(), ensureHCaptchaApi()]);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, reason: error?.message || "prewarm-failed" };
+  }
 }
 
 function captchaLayer() {
@@ -112,8 +190,8 @@ async function requestCaptchaToken() {
     throw new Error(`Abra a aplicação por ${config.localHostname || "o hostname local configurado"} para usar hCaptcha.`);
   }
 
-  ensureCaptchaCss();
-  const api = await ensureHCaptchaApi();
+  const readiness = await Promise.all([ensureCaptchaCss(), ensureHCaptchaApi()]);
+  const api = readiness[1];
   const layer = captchaLayer();
   replaceTrustedChildren(layer, captchaModalMarkup());
   const dialog = layer.querySelector("#app-hcaptcha-dialog");
@@ -125,6 +203,7 @@ async function requestCaptchaToken() {
   return new Promise((resolve, reject) => {
     let settled = false;
     let widgetId = null;
+    let transientRetryUsed = false;
 
     const cleanup = () => {
       document.removeEventListener("keydown", onKeyDown, true);
@@ -165,7 +244,21 @@ async function requestCaptchaToken() {
           if (message) message.textContent = "A confirmação expirou. Marque a caixa novamente.";
           try { api.reset(widgetId); } catch (_) {}
         },
-        "error-callback": () => {
+        "error-callback": (errorCode) => {
+          const code = String(errorCode || "");
+          if (!settled && !transientRetryUsed && ["challenge-error", "internal-error"].includes(code)) {
+            transientRetryUsed = true;
+            if (message) message.textContent = "Reiniciando a confirmação...";
+            window.setTimeout(() => {
+              if (settled || widgetId === null) return;
+              try {
+                api.reset(widgetId);
+              } catch (_) {
+                if (message) message.textContent = "Não foi possível carregar a confirmação. Tente novamente.";
+              }
+            }, 600);
+            return;
+          }
           if (message) message.textContent = "Não foi possível carregar a confirmação. Tente novamente.";
         }
       });
@@ -179,4 +272,4 @@ async function requestCaptchaToken() {
 }
 
 
-export { captchaLayer, requestCaptchaToken };
+export { captchaLayer, prewarmCaptcha, requestCaptchaToken };

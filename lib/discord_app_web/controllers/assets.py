@@ -14,19 +14,27 @@ PINNED_CLOUDINARY_IMAGE_URLS = {
 }
 
 
+def _no_store_static(directory, filename):
+    response = send_from_directory(directory, filename, conditional=False, max_age=0)
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 def public_root_asset(filename: str):
     if filename not in PUBLIC_ROOT_FILES:
         abort(404)
     if filename.endswith(".css"):
-        return send_from_directory(ASSET_CSS_DIR, filename)
-    return send_from_directory(ASSET_JS_DIR, filename)
+        return _no_store_static(ASSET_CSS_DIR, filename)
+    return _no_store_static(ASSET_JS_DIR, filename)
 
 def public_ui_module(filename: str):
     # ui.js é apenas um bootstrap loader; comportamento é dividido em um
     # conjunto fechado/allowlisted de módulos servido por esta rota.
     if filename not in UI_MODULE_FILES:
         abort(404)
-    return send_from_directory(UI_JS_DIR, filename)
+    return _no_store_static(UI_JS_DIR, filename)
 
 def font_asset(filename: str):
     if not filename.lower().endswith(".woff2"):
