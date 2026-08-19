@@ -1,0 +1,28 @@
+Phoenix-style source layout (runtime remains Python/Flask)
+
+assets/
+config/
+lib/
+  discord_app/
+  discord_app_web/
+    app.py
+    router.py
+    runtime.py
+    security.py
+    registration.py
+    presenters.py
+    controllers/
+      auth/
+      admin/
+      pages.py
+      guilds.py
+      friends.py
+      voice.py
+      assets.py
+    templates/admin/
+priv/
+  architecture/
+  scripts/
+  static/
+  supabase/migrations/
+test/

@@ -1,0 +1,20 @@
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CONFIG_DIR = PROJECT_ROOT / "config"
+ASSETS_DIR = PROJECT_ROOT / "assets"
+ASSET_CSS_DIR = ASSETS_DIR / "css"
+ASSET_JS_DIR = ASSETS_DIR / "js"
+UI_JS_DIR = ASSET_JS_DIR / "ui"
+PRIV_DIR = PROJECT_ROOT / "priv"
+STATIC_DIR = PRIV_DIR / "static"
+STATIC_PAGES_DIR = STATIC_DIR / "pages"
+STATIC_FONTS_DIR = STATIC_DIR / "fonts"
+STATIC_ASSETS_DIR = STATIC_DIR / "assets"
+STATIC_IMAGES_DIR = STATIC_DIR / "images"
+ARCHITECTURE_DIR = PRIV_DIR / "architecture"
+SUPABASE_DIR = PRIV_DIR / "supabase"
+SUPABASE_MIGRATIONS_DIR = SUPABASE_DIR / "migrations"
+SCRIPTS_DIR = PRIV_DIR / "scripts"
+INSTANCE_DIR = PROJECT_ROOT / "instance"
+RUNTIME_DIR = PROJECT_ROOT / ".runtime"

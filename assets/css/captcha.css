@@ -1,0 +1,5 @@
+/* Supplemental modal-only rules. The captured discord.css remains untouched. */
+.captchaContainer_deee3a{align-items:center;display:flex;justify-content:center;min-height:76px;padding:0 var(--custom-modal-padding) var(--space-8)}
+.manaDesktopModal_deee3a{box-sizing:border-box;width:100%}
+.hcaptchaMount_local{align-items:center;display:flex;justify-content:center;min-height:76px;min-width:302px}
+.hcaptchaMessage_local{box-sizing:border-box;color:var(--text-muted);font-size:12px;padding:0 var(--custom-modal-padding) var(--space-8);text-align:center;width:100%}

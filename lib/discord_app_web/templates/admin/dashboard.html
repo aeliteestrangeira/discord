@@ -1,0 +1,64 @@
+{% extends "admin/base.html" %}
+{% block title %}Visão geral - Administrador{% endblock %}
+{% block heading %}Visão geral{% endblock %}
+{% block content %}
+<div class="grid">
+  <section class="card">
+    <h2>Autenticação pública</h2>
+    <span class="status {{ 'ok' if public_configured else 'bad' }}">{{ 'CONFIGURADA' if public_configured else 'NEGADA' }}</span>
+    <p class="muted">Login e cadastro usam apenas o backend Flask.</p>
+  </section>
+  <section class="card">
+    <h2>Operações administrativas</h2>
+    <span class="status {{ 'ok' if admin_configured else 'warn' }}">{{ 'HABILITADAS' if admin_configured else 'DEFAULT DENY' }}</span>
+    <p class="muted">Gerenciamento de usuários usa credencial server-side: {{ admin_key_kind }}.</p>
+  </section>
+  <section class="card">
+    <h2>Banco direto</h2>
+    <span class="status {{ 'ok' if database_configured else 'warn' }}">{{ 'HABILITADO' if database_configured else 'DEFAULT DENY' }}</span>
+    <p class="muted">DDL e inventário de tabelas exigem senha da conexão direta.</p>
+  </section>
+  <section class="card">
+    <h2>Verificação humana</h2>
+    <span class="status {{ 'ok' if hcaptcha_configured else 'bad' }}">{{ 'CONFIGURADA' if hcaptcha_configured else 'LOGIN NEGADO' }}</span>
+    <p class="muted">O login exige hCaptcha validado no backend antes de consultar qualquer autoridade de identidade.</p>
+  </section>
+  <section class="card">
+    <h2>Entrega de e-mail</h2>
+    <span class="status ok">{{ gmail_active_provider|upper }} ATIVO</span>
+    <p class="muted">Gmail API futuro: <span class="status {{ 'ok' if gmail_configured else 'warn' }}">{{ 'PREPARADO' if gmail_configured else 'AUSENTE' }}</span>. A troca de provedor ainda não está habilitada.</p>
+  </section>
+  <section class="card">
+    <h2>JWKS</h2>
+    <span class="status {{ 'ok' if jwks_configured else 'warn' }}">{{ 'CONFIGURADO' if jwks_configured else 'AUSENTE' }}</span>
+    <p class="muted">Discovery das chaves públicas para verificação de JWTs.</p>
+  </section>
+</div>
+<section class="card">
+  <h2>Integridade da auditoria</h2>
+  {% if audit_chain_ok %}
+    <span class="status ok">CADEIA ÍNTEGRA</span>
+  {% else %}
+    <span class="status bad">FALHA NO EVENTO {{ audit_chain_bad_id }}</span>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>Eventos recentes</h2>
+  <table>
+    <thead><tr><th>Data</th><th>Ator</th><th>Ação</th><th>Resultado</th><th>Alvo</th></tr></thead>
+    <tbody>
+    {% for row in recent %}
+      <tr>
+        <td>{{ row['occurred_at'] }}</td>
+        <td>{{ row['actor_type'] }}{% if row['actor_id'] %}: {{ row['actor_id'] }}{% endif %}</td>
+        <td>{{ row['action'] }}</td>
+        <td>{{ row['outcome'] }}</td>
+        <td>{{ row['target'] or '' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted">Nenhum evento.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

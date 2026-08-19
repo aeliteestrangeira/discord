@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+{% block title %}Usuários - Administrador{% endblock %}
+{% block heading %}Usuários{% endblock %}
+{% block content %}
+{% if message %}<div class="message">{{ message }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if not admin_configured %}
+<section class="card"><span class="status warn">DEFAULT DENY</span><p>Operações estão bloqueadas até existir uma chave administrativa server-side.</p></section>
+{% else %}
+<div class="grid two">
+<section class="card">
+  <h2>Criar usuário</h2>
+  <form method="post" autocomplete="off">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="create">
+    <div class="field"><label>E-mail</label><input name="email" type="email" required maxlength="320"></div>
+    <div class="field"><label>Senha inicial</label><input name="password" type="password" required maxlength="4096" autocomplete="new-password"></div>
+    <div class="field"><label><input name="email_confirm" type="checkbox" value="1" class="check"> Marcar e-mail como confirmado</label></div>
+    <button type="submit">Criar</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Convidar usuário</h2>
+  <form method="post" autocomplete="off">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="invite">
+    <div class="field"><label>E-mail</label><input name="email" type="email" required maxlength="320"></div>
+    <button type="submit">Enviar convite</button>
+  </form>
+</section>
+</div>
+<section class="card wide-card">
+  <h2>Até 100 usuários</h2>
+  <div class="table-scroll"><table>
+    <thead><tr><th>ID</th><th>E-mail</th><th>Telefone</th><th>Confirmado</th><th>Banido até</th><th>Último login</th><th>Ações</th></tr></thead>
+    <tbody>
+    {% for user in users %}
+      <tr>
+        <td><code>{{ user.id }}</code></td><td>{{ user.email }}</td><td>{{ user.phone }}</td><td>{{ user.email_confirmed_at }}</td><td>{{ user.banned_until }}</td><td>{{ user.last_sign_in_at }}</td>
+        <td class="actions-cell">
+          <form method="post" action="/admin/users/{{ user.id }}/update" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="confirm-email"><button class="secondary" type="submit">Confirmar e-mail</button></form>
+          <form method="post" action="/admin/users/{{ user.id }}/update" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="ban"><button class="secondary" type="submit">Banir</button></form>
+          <form method="post" action="/admin/users/{{ user.id }}/update" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="unban"><button class="secondary" type="submit">Desbanir</button></form>
+          <details><summary>Alterar credenciais</summary>
+            <form method="post" action="/admin/users/{{ user.id }}/update" class="stack-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set-email"><input name="email" type="email" placeholder="novo@email" required><button type="submit">Alterar e-mail</button></form>
+            <form method="post" action="/admin/users/{{ user.id }}/update" class="stack-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set-password"><input name="password" type="password" placeholder="nova senha" required autocomplete="new-password"><button type="submit">Alterar senha</button></form>
+          </details>
+          <form method="post" action="/admin/users/{{ user.id }}/delete" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="mode" value="soft"><input name="confirm" placeholder="DESATIVAR" autocomplete="off" required><button class="danger" type="submit">Soft delete</button></form>
+          <form method="post" action="/admin/users/{{ user.id }}/delete" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="mode" value="hard"><input name="confirm" placeholder="EXCLUIR" autocomplete="off" required><button class="danger" type="submit">Excluir</button></form>
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="muted">Nenhum usuário retornado.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "admin/base.html" %}
+{% block title %}Tabelas - Administrador{% endblock %}
+{% block heading %}Tabelas reais{% endblock %}
+{% block content %}
+{% if message %}<div class="message">{{ message }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if not database_configured %}
+<section class="card"><span class="status warn">DEFAULT DENY</span><p>A conexão PostgreSQL direta do projeto Supabase não está habilitada.</p></section>
+{% else %}
+<section class="card">
+  <h2>Supabase PostgreSQL</h2>
+  <p class="muted">Esta área consulta o banco PostgreSQL real do projeto. O painel do Supabase da captura está filtrado no schema <code>public</code>; por isso ele mostra apenas as tabelas desse schema. Tabelas de autenticação ficam em <code>auth</code> e as tabelas privadas do aplicativo em <code>app_private</code>.</p>
+  <div class="grid two">
+    <div class="field"><label>Project ref</label><input value="{{ project_ref }}" readonly></div>
+    <div class="field"><label>Host PostgreSQL</label><input value="{{ db_host }}" readonly></div>
+    {% if db_health %}<div class="field"><label>Database</label><input value="{{ db_health.database }}" readonly></div><div class="field"><label>Usuário da conexão</label><input value="{{ db_health.user }}" readonly></div>{% endif %}
+  </div>
+  <form method="get" class="schema-filter">
+    <div class="field"><label for="schema">Schema</label><select id="schema" name="schema">{% for schema in schemas %}<option value="{{ schema }}" {% if schema == selected_schema %}selected{% endif %}>{{ schema }}</option>{% endfor %}</select></div>
+    <button type="submit">Abrir schema</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Schema {{ selected_schema }}</h2>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Tabela</th><th>Colunas</th><th>Owner</th><th>RLS</th><th>FORCE RLS</th><th>Linhas estimadas</th><th>Tamanho</th><th>Controle</th></tr></thead>
+    <tbody>
+    {% for item in tables %}<tr>
+      <td><a href="{{ url_for('admin_tables', schema=item.schema, table=item.table) }}"><code>{{ item.schema }}.{{ item.table }}</code></a></td>
+      <td>{{ item.columns }}</td><td>{{ item.owner }}</td>
+      <td><span class="status {{ 'ok' if item.rls_enabled else 'warn' }}">{{ 'ON' if item.rls_enabled else 'OFF' }}</span></td>
+      <td><span class="status {{ 'ok' if item.rls_forced else 'warn' }}">{{ 'ON' if item.rls_forced else 'OFF' }}</span></td>
+      <td>{{ item.estimated_rows }}</td><td>{{ item.total_size }}</td>
+      <td>
+        {% if item.rls_manageable %}
+          {% if not item.rls_enabled %}<form method="post" action="/admin/tables/rls" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="schema" value="{{ item.schema }}"><input type="hidden" name="table" value="{{ item.table }}"><input type="hidden" name="mode" value="enable"><input name="confirm" placeholder="ATIVAR" required><button type="submit">Ativar RLS</button></form>{% endif %}
+          {% if item.rls_enabled and not item.rls_forced %}<form method="post" action="/admin/tables/rls" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="schema" value="{{ item.schema }}"><input type="hidden" name="table" value="{{ item.table }}"><input type="hidden" name="mode" value="force"><input name="confirm" placeholder="ATIVAR" required><button type="submit">Forçar RLS</button></form>{% endif %}
+          {% if item.rls_enabled and item.rls_forced %}<span class="muted">RLS do aplicativo</span>{% endif %}
+        {% elif item.schema == "app_private" %}<span class="muted">Schema privado; grants revogados</span>
+        {% else %}<span class="muted">Somente inspeção</span>{% endif %}
+      </td>
+    </tr>{% else %}<tr><td colspan="8" class="muted">Nenhuma tabela neste schema.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+{% if table_detail %}
+<section class="card">
+  <h2>{{ table_detail.schema }}.{{ table_detail.table }}</h2>
+  <p class="muted">Metadados lidos diretamente dos catálogos PostgreSQL.</p>
+  <h3>Colunas</h3>
+  <div class="table-scroll"><table><thead><tr><th>Nome</th><th>Tipo</th><th>PK</th><th>Nullable</th><th>Default</th></tr></thead><tbody>{% for col in table_detail.columns %}<tr><td><code>{{ col.name }}</code></td><td>{{ col.type }}</td><td>{{ 'SIM' if col.primary_key else '' }}</td><td>{{ 'SIM' if col.nullable else 'NÃO' }}</td><td><code>{{ col.default }}</code></td></tr>{% endfor %}</tbody></table></div>
+  <h3>Constraints</h3>
+  <div class="table-scroll"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Definição</th></tr></thead><tbody>{% for item in table_detail.constraints %}<tr><td><code>{{ item.name }}</code></td><td>{{ item.type }}</td><td><code>{{ item.definition }}</code></td></tr>{% else %}<tr><td colspan="3" class="muted">Nenhuma.</td></tr>{% endfor %}</tbody></table></div>
+  <h3>Índices</h3>
+  <div class="table-scroll"><table><thead><tr><th>Nome</th><th>Definição</th></tr></thead><tbody>{% for item in table_detail.indexes %}<tr><td><code>{{ item.name }}</code></td><td><code>{{ item.definition }}</code></td></tr>{% else %}<tr><td colspan="2" class="muted">Nenhum.</td></tr>{% endfor %}</tbody></table></div>
+  <h3>Políticas RLS</h3>
+  <div class="table-scroll"><table><thead><tr><th>Nome</th><th>Comando</th><th>Roles</th><th>USING</th><th>WITH CHECK</th></tr></thead><tbody>{% for item in table_detail.policies %}<tr><td><code>{{ item.name }}</code></td><td>{{ item.command }}</td><td>{{ item.roles }}</td><td><code>{{ item.using }}</code></td><td><code>{{ item.check }}</code></td></tr>{% else %}<tr><td colspan="5" class="muted">Nenhuma política.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Migrações reais do Supabase</h2>
+  <p class="muted">O ledger fica em <code>app_private.schema_migrations</code>. Cada arquivo SQL é associado a SHA-256; se um arquivo aplicado for alterado, a execução falha em vez de sobrescrever silenciosamente o histórico.</p>
+  <p>Estado: <span class="status {{ 'ok' if migration_status.ready else 'warn' }}">{{ 'SINCRONIZADO' if migration_status.ready else 'PENDENTE' }}</span></p>
+  <div class="table-scroll"><table><thead><tr><th>Migração</th><th>Estado</th><th>Aplicada em</th><th>SHA-256</th></tr></thead><tbody>{% for item in migration_status.migrations %}<tr><td><code>{{ item.migration }}</code></td><td><span class="status {{ 'ok' if item.state == 'applied' else 'bad' if item.state == 'checksum-mismatch' else 'warn' }}">{{ item.state }}</span></td><td>{{ item.applied_at }}</td><td><code>{{ item.checksum }}</code></td></tr>{% else %}<tr><td colspan="4" class="muted">Ledger ainda não disponível.</td></tr>{% endfor %}</tbody></table></div>
+  <form method="post" class="inline-form migration-action"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="action" value="apply-core-migration"><input type="hidden" name="schema" value="{{ selected_schema }}"><input name="confirm" placeholder="APLICAR" required autocomplete="off"><button type="submit">Aplicar/verificar migrações</button></form>
+</section>
+
+<section class="card">
+  <h2>Controle local — não é Supabase</h2>
+  <p class="muted">Estas tabelas pertencem ao arquivo local <code>instance/control.sqlite3</code>. Administradores, sessões locais, segredos criptografados, rate limits e a cadeia de auditoria ficam deliberadamente fora do schema <code>public</code>. Esta separação evita publicar segredos administrativos na API de dados.</p>
+  <div class="table-scroll"><table><thead><tr><th>Tabela local</th><th>Colunas</th><th>Linhas</th><th>Armazenamento</th></tr></thead><tbody>{% for item in local_tables %}<tr><td><code>{{ item.table }}</code></td><td>{{ item.columns }}</td><td>{{ item.rows }}</td><td><code>{{ item.storage }}</code></td></tr>{% endfor %}</tbody></table></div>
+</section>
+
+<section class="card"><h2>Console SQL remoto</h2><p class="muted">O console SQL do administrador usa a mesma conexão PostgreSQL real acima. Escritas nos schemas gerenciados pelo Supabase, como <code>auth</code>, são bloqueadas; gerenciamento de usuários continua pelo Auth Admin.</p><a class="button-link" href="/admin/sql">Abrir console SQL</a></section>
+{% endif %}
+{% endblock %}

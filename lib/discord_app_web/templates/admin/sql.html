@@ -1,0 +1,24 @@
+{% extends "admin/base.html" %}
+{% block title %}SQL - Administrador{% endblock %}
+{% block heading %}Console SQL Supabase{% endblock %}
+{% block content %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if not database_configured %}<section class="card"><span class="status warn">DEFAULT DENY</span><p>Conexão PostgreSQL ausente.</p></section>{% else %}
+<section class="card">
+  <h2>Destino real</h2>
+  <div class="grid two"><div class="field"><label>Project ref</label><input value="{{ project_ref }}" readonly></div><div class="field"><label>Host</label><input value="{{ db_host }}" readonly></div>{% if db_health %}<div class="field"><label>Database</label><input value="{{ db_health.database }}" readonly></div><div class="field"><label>Role PostgreSQL</label><input value="{{ db_health.user }}" readonly></div>{% endif %}</div>
+</section>
+<section class="card">
+  <h2>Comando único</h2>
+  <p class="muted">Modo leitura roda em transação READ ONLY. Alterações exigem modo de alteração e a confirmação <code>EXECUTAR</code>. Roles, ALTER SYSTEM, SECURITY LABEL, COPY PROGRAM e escritas diretas em schemas gerenciados pelo Supabase (<code>auth</code>, <code>storage</code>, <code>realtime</code> etc.) são bloqueados. Use <code>public</code> e <code>app_private</code> para objetos do aplicativo.</p>
+  <form method="post" autocomplete="off">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div class="field"><label for="sql">SQL</label><textarea id="sql" name="sql" rows="10" maxlength="20000" spellcheck="false">{{ sql_text }}</textarea></div>
+    <div class="field"><label for="mode">Modo</label><select id="mode" name="mode"><option value="read" {% if mode == 'read' %}selected{% endif %}>Somente leitura</option><option value="write" {% if mode == 'write' %}selected{% endif %}>Alteração</option></select></div>
+    <div class="field"><label for="confirm">Confirmação para alteração</label><input id="confirm" name="confirm" placeholder="EXECUTAR" autocomplete="off"></div>
+    <button type="submit">Executar no Supabase</button>
+  </form>
+</section>
+{% if result %}<section class="card"><h2>Resultado</h2><p class="muted">{{ result.keyword }} · {{ result.duration_ms }} ms · rowcount {{ result.rowcount }}{% if result.truncated %} · resultado truncado{% endif %}</p>{% if result.columns %}<div class="table-scroll"><table><thead><tr>{% for col in result.columns %}<th>{{ col }}</th>{% endfor %}</tr></thead><tbody>{% for row in result.rows %}<tr>{% for value in row %}<td><code>{{ value }}</code></td>{% endfor %}</tr>{% endfor %}</tbody></table></div>{% endif %}</section>{% endif %}
+{% endif %}
+{% endblock %}

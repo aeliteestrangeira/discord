@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+instance/*
+!instance/.gitkeep
+.runtime/*
+!.runtime/.gitkeep
+
+config/SUPABASE_PRIVILEGED.env
