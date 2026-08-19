@@ -1,0 +1,43 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f5f7fb;
+  background: #0b0d12;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(88, 101, 242, .24), transparent 34rem),
+    radial-gradient(circle at 90% 20%, rgba(38, 198, 218, .12), transparent 30rem),
+    #0b0d12;
+}
+a { color: inherit; }
+.shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 72px 0 48px; }
+.hero { padding: 72px 0 64px; border-bottom: 1px solid rgba(255,255,255,.09); }
+.eyebrow { font-size: 12px; letter-spacing: .18em; font-weight: 800; color: #9aa6ff; }
+h1 { max-width: 880px; margin: 18px 0 20px; font-size: clamp(46px, 7vw, 92px); line-height: .97; letter-spacing: -.05em; }
+.lead { max-width: 760px; color: #b9c0cf; font-size: clamp(18px, 2.1vw, 24px); line-height: 1.55; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+.actions a { text-decoration: none; border-radius: 12px; padding: 15px 20px; font-weight: 750; }
+.primary { background: #5865f2; box-shadow: 0 14px 34px rgba(88,101,242,.28); }
+.secondary { border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.045); }
+.status { min-height: 24px; margin-top: 18px; color: #8f98a9; font-size: 14px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; padding: 34px 0; }
+.grid article { min-height: 220px; padding: 26px; border-radius: 18px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.035); }
+.number { color: #697386; font-size: 12px; font-weight: 800; }
+h2 { margin: 42px 0 12px; font-size: 25px; letter-spacing: -.02em; }
+.grid p, .security p, footer { color: #aeb6c5; line-height: 1.65; }
+.security { display: grid; grid-template-columns: 1.1fr .9fr; gap: 44px; align-items: end; padding: 54px 0; border-top: 1px solid rgba(255,255,255,.09); border-bottom: 1px solid rgba(255,255,255,.09); }
+.security h2 { margin: 16px 0 0; font-size: clamp(30px, 4vw, 48px); }
+code { padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,.07); color: #dce1ff; }
+footer { display: flex; justify-content: space-between; gap: 32px; padding-top: 32px; font-size: 13px; }
+footer p { max-width: 720px; }
+footer a { color: #c6ceff; }
+@media (max-width: 780px) {
+  .shell { width: min(100% - 28px, 1120px); padding-top: 28px; }
+  .hero { padding-top: 42px; }
+  .grid, .security { grid-template-columns: 1fr; }
+  footer { flex-direction: column; }
+}

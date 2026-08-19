@@ -1,104 +1,231 @@
 "use strict";
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { setTimeout: sleep } = require("node:timers/promises");
 const { APP_PORT, HEALTH_URL } = require("./constants.cjs");
 
-const ROOT = path.resolve(__dirname, "..");
-const RUNTIME = path.join(ROOT, ".runtime");
-const LOG = path.join(RUNTIME, "desktop.log");
-const PYTHON = path.join(ROOT, ".venv", "Scripts", "python.exe");
+const SOURCE_ROOT = path.resolve(__dirname, "..");
+let runtimeRoot = path.join(SOURCE_ROOT, ".runtime");
+let logPath = path.join(runtimeRoot, "desktop.log");
+let packagedBackend = null;
 
-function ensureRuntimeDir() {
-  fs.mkdirSync(RUNTIME, { recursive: true });
+function ensureDir(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+function setLogRoot(dir) {
+  runtimeRoot = dir;
+  ensureDir(runtimeRoot);
+  logPath = path.join(runtimeRoot, "desktop.log");
 }
 
 function log(line) {
-  ensureRuntimeDir();
-  const text = `${new Date().toISOString()} ${line}\n`;
-  fs.appendFileSync(LOG, text, { encoding: "utf8" });
+  ensureDir(runtimeRoot);
+  fs.appendFileSync(logPath, `${new Date().toISOString()} ${line}\n`, { encoding: "utf8" });
 }
 
-function run(command, args, { timeoutMs = 0, phase = command } = {}) {
+function run(command, args, { timeoutMs = 0, phase = command, cwd = SOURCE_ROOT, env = process.env } = {}) {
   return new Promise((resolve, reject) => {
     log(`[${phase}] start: ${command} ${args.join(" ")}`);
     const child = spawn(command, args, {
-      cwd: ROOT,
+      cwd,
       windowsHide: true,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env }
+      env: { ...process.env, ...env }
     });
 
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.stdout?.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
+    child.stderr?.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
 
     let timer = null;
+    let settled = false;
+    const finish = (error, result) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (error) reject(error); else resolve(result);
+    };
+
     if (timeoutMs > 0) {
       timer = setTimeout(() => {
         try { child.kill(); } catch (_) {}
-        reject(new Error(`${phase}: timeout apos ${timeoutMs} ms.`));
+        finish(new Error(`${phase}: timeout apos ${timeoutMs} ms.`));
       }, timeoutMs);
     }
 
     child.once("error", (error) => {
-      if (timer) clearTimeout(timer);
       log(`[${phase}] spawn-error: ${error.message}`);
-      reject(error);
+      finish(error);
     });
 
     child.once("exit", (code, signal) => {
-      if (timer) clearTimeout(timer);
       if (stdout.trim()) log(`[${phase}] stdout: ${stdout.trim()}`);
       if (stderr.trim()) log(`[${phase}] stderr: ${stderr.trim()}`);
       if (code === 0) {
         log(`[${phase}] ok`);
-        resolve({ stdout, stderr });
+        finish(null, { stdout, stderr });
         return;
       }
-      reject(new Error(`${phase} falhou (codigo=${code}, signal=${signal || "none"}).`));
+      finish(new Error(`${phase} falhou (codigo=${code}, signal=${signal || "none"}).`));
     });
   });
 }
 
-function powershell(scriptRelativePath, extraArgs = [], phase = scriptRelativePath) {
-  const script = path.join(ROOT, scriptRelativePath);
+function powershell(script, extraArgs = [], phase = path.basename(script), options = {}) {
   return run(
     "powershell.exe",
     ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, ...extraArgs],
-    { phase }
+    { phase, ...options }
   );
 }
 
+function devPython() {
+  return path.join(SOURCE_ROOT, ".venv", "Scripts", "python.exe");
+}
+
 async function ensurePythonEnvironment() {
-  if (fs.existsSync(PYTHON)) return;
+  const python = devPython();
+  if (fs.existsSync(python)) return;
   await run("cmd.exe", ["/d", "/s", "/c", "call INSTALL_DEPENDENCIES.bat"], {
     phase: "python-dependencies"
   });
-  if (!fs.existsSync(PYTHON)) {
+  if (!fs.existsSync(python)) {
     throw new Error("O ambiente Python nao foi criado por INSTALL_DEPENDENCIES.bat.");
   }
 }
 
-async function prepareLocalRuntime() {
-  if (process.platform !== "win32") {
-    throw new Error("Esta fase desktop suporta Windows somente.");
+function dataPaths(dataRoot) {
+  const instance = path.join(dataRoot, "instance");
+  const runtime = path.join(dataRoot, "runtime");
+  const config = path.join(dataRoot, "config");
+  return Object.freeze({
+    root: dataRoot,
+    instance,
+    runtime,
+    config,
+    privateEnv: path.join(config, "SUPABASE_PRIVILEGED.env"),
+    tlsDir: path.join(instance, "tls"),
+    ca: path.join(instance, "tls", "local-ca.cer"),
+    cert: path.join(instance, "tls", "server-cert.pem"),
+    key: path.join(instance, "tls", "server-key.pem")
+  });
+}
+
+function ensureDataTree(paths) {
+  for (const dir of [paths.root, paths.instance, paths.runtime, paths.config, paths.tlsDir]) ensureDir(dir);
+}
+
+function privateBootstrapPresent(paths) {
+  return fs.existsSync(paths.privateEnv) && fs.statSync(paths.privateEnv).isFile();
+}
+
+function importPrivateBootstrap(sourceFile, paths) {
+  if (!sourceFile) return false;
+  const source = path.resolve(sourceFile);
+  if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
+    throw new Error("Arquivo privado selecionado nao existe.");
   }
-  ensureRuntimeDir();
-  log("desktop bootstrap begin");
+  ensureDir(paths.config);
+  if (fs.existsSync(paths.privateEnv)) {
+    throw new Error("O bootstrap privado persistente ja existe e nao sera sobrescrito automaticamente.");
+  }
+  fs.copyFileSync(source, paths.privateEnv, fs.constants.COPYFILE_EXCL);
+  log(`private bootstrap imported from explicit user selection: ${path.basename(source)}`);
+  return true;
+}
+
+function packagedEnv(paths) {
+  return {
+    APP_HOSTNAME: "discord",
+    FLASK_BIND: "127.0.0.1",
+    FLASK_PORT: String(APP_PORT),
+    DISCORD_INSTANCE_DIR: paths.instance,
+    DISCORD_RUNTIME_DIR: paths.runtime,
+    DISCORD_PRIVATE_CONFIG_DIR: paths.config,
+    DISCORD_PRIVATE_ENV_FILE: paths.privateEnv,
+    DISCORD_DESKTOP_PACKAGED: "1"
+  };
+}
+
+async function prepareSourceRuntime() {
+  setLogRoot(path.join(SOURCE_ROOT, ".runtime"));
+  log("desktop bootstrap begin mode=source");
   await ensurePythonEnvironment();
-  await powershell("priv/scripts/ensure_local_hostname.ps1", [], "hostname");
-  await powershell("priv/scripts/harden_instance.ps1", [], "instance-acl");
-  await powershell("priv/scripts/ensure_local_tls.ps1", [], "local-tls");
+  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "ensure_local_hostname.ps1"), [], "hostname");
+  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "harden_instance.ps1"), [], "instance-acl");
+  await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "ensure_local_tls.ps1"), [], "local-tls");
   await powershell(
-    "priv/scripts/restart_server.ps1",
+    path.join(SOURCE_ROOT, "priv", "scripts", "restart_server.ps1"),
     ["-Port", String(APP_PORT), "-NoBrowser"],
     "flask-restart"
   );
+  return { mode: "source", paths: dataPaths(SOURCE_ROOT) };
+}
+
+function spawnPackagedBackend(executable, args, env, cwd) {
+  const child = spawn(executable, args, {
+    cwd,
+    windowsHide: true,
+    shell: false,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, ...env }
+  });
+  child.stdout?.on("data", (chunk) => log(`[backend] stdout: ${chunk.toString("utf8").trimEnd()}`));
+  child.stderr?.on("data", (chunk) => log(`[backend] stderr: ${chunk.toString("utf8").trimEnd()}`));
+  child.once("error", (error) => log(`[backend] spawn-error: ${error.message}`));
+  child.once("exit", (code, signal) => log(`[backend] exit code=${code} signal=${signal || "none"}`));
+  return child;
+}
+
+async function preparePackagedRuntime({ resourcesPath, dataRoot }) {
+  const paths = dataPaths(dataRoot);
+  ensureDataTree(paths);
+  setLogRoot(paths.runtime);
+  log("desktop bootstrap begin mode=packaged");
+
+  const runtimeDir = path.join(resourcesPath, "runtime");
+  const backendDir = path.join(resourcesPath, "backend");
+  const hostnameScript = path.join(runtimeDir, "ensure_local_hostname.ps1");
+  const setupScript = path.join(runtimeDir, "packaged_setup.ps1");
+  const tlsExe = path.join(backendDir, "discord-tls.exe");
+  const backendExe = path.join(backendDir, "discord-backend.exe");
+  for (const required of [hostnameScript, setupScript, tlsExe, backendExe]) {
+    if (!fs.existsSync(required)) throw new Error(`Recurso do instalador ausente: ${required}`);
+  }
+
+  const env = packagedEnv(paths);
+  await powershell(hostnameScript, ["-LogPath", path.join(paths.runtime, "hostname-setup.log")], "hostname", { env });
+  await run(tlsExe, [], { phase: "local-tls-generate", cwd: dataRoot, env, timeoutMs: 30000 });
+  await powershell(setupScript, ["-DataRoot", dataRoot, "-CaPath", paths.ca], "desktop-data-acl-and-trust", { env });
+
+  if (packagedBackend && !packagedBackend.killed) {
+    try { packagedBackend.kill(); } catch (_) {}
+  }
+  const marker = `${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  packagedBackend = spawnPackagedBackend(
+    backendExe,
+    ["--bind", "127.0.0.1", "--port", String(APP_PORT), "--tls-cert", paths.cert, "--tls-key", paths.key, "--instance-marker", marker],
+    env,
+    dataRoot
+  );
+  return { mode: "packaged", paths };
+}
+
+async function prepareLocalRuntime(options = {}) {
+  if (process.platform !== "win32") {
+    throw new Error("Esta fase desktop suporta Windows somente.");
+  }
+  if (options.packaged) {
+    if (!options.resourcesPath || !options.dataRoot) throw new Error("Desktop empacotado sem resourcesPath/dataRoot.");
+    return preparePackagedRuntime(options);
+  }
+  return prepareSourceRuntime();
 }
 
 async function waitForBackend(fetchFn, timeoutMs = 30000) {
@@ -133,18 +260,28 @@ async function waitForBackend(fetchFn, timeoutMs = 30000) {
   throw new Error(`Backend nao ficou pronto em ${timeoutMs} ms: ${lastError?.message || "sem resposta"}`);
 }
 
-async function stopBackend() {
+async function stopBackend({ packaged = false } = {}) {
   if (process.platform !== "win32") return;
+  if (packaged) {
+    const child = packagedBackend;
+    packagedBackend = null;
+    if (!child || child.killed) return;
+    try { child.kill(); } catch (error) { log(`[backend-stop] non-fatal: ${error.message}`); }
+    return;
+  }
   try {
-    await powershell("priv/scripts/stop_server.ps1", [], "flask-stop");
+    await powershell(path.join(SOURCE_ROOT, "priv", "scripts", "stop_server.ps1"), [], "flask-stop");
   } catch (error) {
     log(`[flask-stop] non-fatal: ${error.message}`);
   }
 }
 
 module.exports = Object.freeze({
-  ROOT,
-  LOG,
+  SOURCE_ROOT,
+  get LOG() { return logPath; },
+  dataPaths,
+  privateBootstrapPresent,
+  importPrivateBootstrap,
   prepareLocalRuntime,
   waitForBackend,
   stopBackend,

@@ -11,3 +11,5 @@ config/SUPABASE_PRIVILEGED.env
 node_modules/
 out/
 *.log
+build/
+.pytest_cache/

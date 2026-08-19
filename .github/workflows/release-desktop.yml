@@ -1,0 +1,100 @@
+name: Release Windows Desktop
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.14"
+          cache: pip
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Validate tag and package version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          $pkg = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne $pkg) { throw "Tag $tag does not match package version $pkg" }
+
+      - name: Install Python build dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt pyinstaller==6.21.0
+
+      - name: Run Python tests
+        run: python verify_architecture.py
+
+      - name: Build standalone Flask backend
+        shell: pwsh
+        run: ./desktop/build_backend.ps1
+
+      - name: Smoke test packaged TLS helper
+        shell: pwsh
+        run: |
+          $env:DISCORD_INSTANCE_DIR = Join-Path $env:RUNNER_TEMP "discord-instance"
+          New-Item -ItemType Directory -Force -Path $env:DISCORD_INSTANCE_DIR | Out-Null
+          ./build/backend/discord-tls.exe
+          if (-not (Test-Path (Join-Path $env:DISCORD_INSTANCE_DIR "tls/server-cert.pem"))) { throw "TLS certificate missing" }
+          if (-not (Test-Path (Join-Path $env:DISCORD_INSTANCE_DIR "tls/server-key.pem"))) { throw "TLS key missing" }
+
+      - name: Install desktop dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Desktop JavaScript checks
+        run: npm run desktop:check
+
+      - name: Build NSIS installer
+        run: npm run desktop:dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Create SHA-256 manifest
+        shell: pwsh
+        run: |
+          $items = Get-ChildItem out -File | Where-Object { $_.Extension -in @('.exe', '.yml', '.blockmap') }
+          if (-not $items) { throw "No release artifacts found" }
+          $lines = foreach ($item in $items) {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $item.FullName).Hash.ToLowerInvariant()
+            "$hash  $($item.Name)"
+          }
+          $lines | Set-Content -LiteralPath out/SHA256SUMS.txt -Encoding ascii
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          make_latest: true
+          files: |
+            out/*.exe
+            out/*.yml
+            out/*.blockmap
+            out/SHA256SUMS.txt
+
+      - name: Upload build artifacts for manual runs
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: discord-desktop-windows
+          path: |
+            out/*.exe
+            out/*.yml
+            out/*.blockmap
+            out/SHA256SUMS.txt

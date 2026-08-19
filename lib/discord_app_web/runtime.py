@@ -15,7 +15,7 @@ from lib.discord_app.mail_config import GmailConfigService, GMAIL_SEND_SCOPE
 from lib.discord_app.paths import (
     PROJECT_ROOT as ROOT, CONFIG_DIR, ASSET_CSS_DIR, ASSET_JS_DIR, UI_JS_DIR,
     STATIC_PAGES_DIR, STATIC_FONTS_DIR, STATIC_ASSETS_DIR, STATIC_IMAGES_DIR,
-    INSTANCE_DIR, RUNTIME_DIR,
+    INSTANCE_DIR, RUNTIME_DIR, PRIVATE_ENV_FILE,
 )
 from lib.discord_app.runtime import RuntimeServices
 from lib.discord_app.security import KeyRing
@@ -26,6 +26,8 @@ from lib.discord_app.supabase_service import ProviderError, SupabaseService
 load_dotenv(ROOT / ".env")
 load_dotenv(CONFIG_DIR / ".env", override=True)
 load_dotenv(CONFIG_DIR / "SUPABASE_PRIVILEGED.env", override=False)
+if PRIVATE_ENV_FILE != (CONFIG_DIR / "SUPABASE_PRIVILEGED.env").resolve():
+    load_dotenv(PRIVATE_ENV_FILE, override=False)
 
 CLOUDINARY_IMPORT_DIR = INSTANCE_DIR / "cloudinary-import"
 RUNTIME_DIR.mkdir(parents=True, exist_ok=True)

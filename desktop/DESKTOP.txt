@@ -1,27 +1,28 @@
-# Desktop Electron — fase 1
+Desktop 4.2.0
+=============
 
-Esta camada abre **o mesmo site Flask existente** dentro de uma `BrowserWindow` Electron. Ela não substitui HTML, CSS, autenticação, Supabase, hCaptcha, voz ou as rotas Flask.
+SOURCE/ALPHA MODE
+- DESKTOP_START.bat continua abrindo o mesmo site Flask dentro do Electron.
+- Python/.venv, instance e configuracao podem permanecer no projeto local.
 
-## Executar no Windows
+INSTALLED MODE
+- electron-builder/NSIS cria o instalador Windows x64.
+- PyInstaller cria discord-backend.exe e discord-tls.exe no GitHub Actions.
+- Dados persistentes: %LOCALAPPDATA%\AEliteEstrangeira\DiscordDesktop\
+- A instalacao/atualizacao nao substitui instance/, config privada ou perfil Electron.
+- Se a configuracao privada persistente estiver ausente, o app permite selecionar explicitamente SUPABASE_PRIVILEGED.env.
 
-1. Instale Node.js LTS.
-2. Execute `DESKTOP_START.bat` na raiz.
-3. Na primeira execução, o script instala Electron e, se necessário, o ambiente Python existente.
-4. A preparação do hostname `discord` pode solicitar UAC uma única vez.
-5. O Electron prepara HTTPS local, inicia Flask sem abrir navegador externo, valida `/api/desktop/health` e só então mostra a aplicação.
+UPDATE
+- electron-updater usa GitHub Releases publico.
+- Sem setInterval/polling periodico.
+- Check automatico no startup respeita intervalo minimo de 6 horas.
+- Quando uma versao e encontrada, o pacote e baixado e o usuario escolhe quando reiniciar.
 
-## Baseline de segurança
+GITHUB PAGES
+- site/ e somente pagina publica de distribuicao/documentacao.
+- Nenhum login/senha e coletado no github.io.
+- Workflow: .github/workflows/pages.yml
 
-- `nodeIntegration: false`.
-- `contextIsolation: true`.
-- `sandbox: true`.
-- `webSecurity: true`.
-- `<webview>` desabilitado.
-- Nova janela bloqueada; somente origens HTTPS explicitamente permitidas podem abrir no navegador do sistema.
-- Permissões em default-deny; somente microfone (`media: audio`) é permitido para `https://discord:8000`.
-- Erro de certificado TLS não é ignorado: a CA local precisa estar instalada corretamente.
-- O backend continua vinculado a `127.0.0.1` e o Host permitido continua sendo `discord`.
-
-## Escopo desta fase
-
-Esta é a primeira integração desktop. Ainda não é o instalador público final e ainda não contém o pipeline de GitHub Releases/auto-update. A próxima fase deve empacotar o runtime Python/backend fora do ASAR, preservar `instance/` em diretório persistente e gerar o instalador Windows assinado.
+RELEASE
+- Crie uma tag que corresponda exatamente ao package.json, por exemplo v4.2.0.
+- O workflow .github/workflows/release-desktop.yml gera o NSIS .exe e publica a GitHub Release.

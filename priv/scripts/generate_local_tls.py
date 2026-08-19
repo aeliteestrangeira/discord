@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -9,8 +10,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 ROOT = Path(__file__).resolve().parents[2]
-HOST = "discord"
-TLS_DIR = ROOT / "instance" / "tls"
+HOST = os.getenv("APP_HOSTNAME", "discord").strip().lower().rstrip(".") or "discord"
+INSTANCE_DIR = Path(os.getenv("DISCORD_INSTANCE_DIR", str(ROOT / "instance"))).expanduser().resolve()
+TLS_DIR = INSTANCE_DIR / "tls"
 TLS_DIR.mkdir(parents=True, exist_ok=True)
 CA_CERT = TLS_DIR / "local-ca.cer"
 SERVER_CERT = TLS_DIR / "server-cert.pem"

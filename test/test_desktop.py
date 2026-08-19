@@ -7,8 +7,12 @@ ROOT = Path(__file__).resolve().parents[1]
 class DesktopArchitectureTests(unittest.TestCase):
     def test_desktop_files_exist(self):
         for relative in (
-            "package.json", "DESKTOP_START.bat", "desktop/main.cjs", "desktop/backend.cjs",
-            "desktop/security.cjs", "desktop/preload.cjs", "desktop/constants.cjs",
+            "package.json", "DESKTOP_START.bat", "MIGRATE_ALPHA_DATA.bat", "MIGRATE_ALPHA_DATA.ps1",
+            "desktop/main.cjs", "desktop/backend.cjs", "desktop/security.cjs",
+            "desktop/preload.cjs", "desktop/constants.cjs", "desktop/updater.cjs",
+            "desktop/packaged_setup.ps1", "desktop/build_backend.ps1",
+            ".github/workflows/pages.yml", ".github/workflows/release-desktop.yml",
+            "site/index.html", "site/site.css", "site/site.js",
         ):
             self.assertTrue((ROOT / relative).is_file(), relative)
 
@@ -34,11 +38,11 @@ class DesktopArchitectureTests(unittest.TestCase):
         self.assertIn('"/api/desktop/health"', source)
         self.assertIn('service="discord-local"', source)
 
-    def test_public_manifest_generator_excludes_private_and_runtime_state(self):
+    def test_public_manifest_generator_excludes_private_and_build_state(self):
         source = (ROOT / "priv/scripts/generate_integrity_manifest.py").read_text(encoding="utf-8")
         for value in (
             '".env"', '"config/.env"', '"config/SUPABASE_PRIVILEGED.env"',
-            '"instance"', '".runtime"', '".venv"', '"node_modules"',
+            '"instance"', '".runtime"', '".venv"', '"node_modules"', '"out"', '"build"',
         ):
             self.assertIn(value, source)
 
@@ -51,9 +55,39 @@ class DesktopArchitectureTests(unittest.TestCase):
         source = (ROOT / ".gitignore").read_text(encoding="utf-8")
         for value in (
             "config/SUPABASE_PRIVILEGED.env", ".env", "instance/*", ".runtime/*",
-            "node_modules/", "out/",
+            "node_modules/", "out/", "build/",
         ):
             self.assertIn(value, source)
+
+    def test_packaged_state_is_outside_install_directory(self):
+        paths = (ROOT / "lib/discord_app/paths.py").read_text(encoding="utf-8")
+        main = (ROOT / "desktop/main.cjs").read_text(encoding="utf-8")
+        backend = (ROOT / "desktop/backend.cjs").read_text(encoding="utf-8")
+        self.assertIn('"DISCORD_INSTANCE_DIR"', paths)
+        self.assertIn('"DISCORD_RUNTIME_DIR"', paths)
+        self.assertIn('"DISCORD_PRIVATE_ENV_FILE"', paths)
+        self.assertIn('"AEliteEstrangeira", "DiscordDesktop"', main)
+        self.assertIn("DISCORD_PRIVATE_CONFIG_DIR", backend)
+
+    def test_updater_has_no_periodic_polling_loop(self):
+        source = (ROOT / "desktop/updater.cjs").read_text(encoding="utf-8")
+        self.assertIn("MIN_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000", source)
+        self.assertIn("autoUpdater.autoDownload = false", source)
+        self.assertNotIn("setInterval(", source)
+        self.assertIn("autoUpdater.checkForUpdates()", source)
+
+    def test_release_uses_nsis_and_github_provider(self):
+        source = (ROOT / "package.json").read_text(encoding="utf-8")
+        self.assertIn('"target": "nsis"', source)
+        self.assertIn('"provider": "github"', source)
+        self.assertIn('"electron-updater": "6.8.9"', source)
+        self.assertIn('"electron-builder": "26.15.3"', source)
+
+    def test_pages_site_has_no_login_form(self):
+        source = (ROOT / "site/index.html").read_text(encoding="utf-8").lower()
+        self.assertNotIn("<form", source)
+        self.assertNotIn('type="password"', source)
+        self.assertIn("projeto educacional e independente", source)
 
 
 if __name__ == "__main__":

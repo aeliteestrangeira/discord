@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "HASHES.sha256"
 
 EXCLUDED_DIRS = {
-    ".git", ".venv", ".runtime", "instance", "node_modules", "out", "__pycache__",
+    ".git", ".venv", ".runtime", "instance", "node_modules", "out", "build", ".pytest_cache", "__pycache__",
 }
 EXCLUDED_FILES = {
     ".env",
