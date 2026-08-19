@@ -1,4 +1,4 @@
-from flask import redirect, send_from_directory, url_for
+from flask import jsonify, redirect, send_from_directory, url_for
 from lib.discord_app_web.runtime import STATIC_PAGES_DIR
 
 def home():
@@ -13,9 +13,13 @@ def login_page_alias():
 def register_page():
     return send_from_directory(STATIC_PAGES_DIR, "register.html")
 
+def desktop_health():
+    return jsonify(ok=True, service="discord-local")
+
 
 def register_routes(app) -> None:
     app.add_url_rule("/", view_func=home, methods=["GET"])
     app.add_url_rule("/login.html", view_func=login_page_legacy, methods=["GET"])
     app.add_url_rule("/login", view_func=login_page_alias, methods=["GET"])
     app.add_url_rule("/register.html", view_func=register_page, methods=["GET"])
+    app.add_url_rule("/api/desktop/health", view_func=desktop_health, methods=["GET"])

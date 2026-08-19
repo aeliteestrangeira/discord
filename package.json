@@ -1,0 +1,17 @@
+{
+  "name": "discord-local-desktop",
+  "version": "4.1.0-alpha.1",
+  "private": true,
+  "description": "Electron desktop shell for the existing local Flask application.",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "desktop:start": "electron desktop/main.cjs",
+    "desktop:check": "node --check desktop/main.cjs && node --check desktop/backend.cjs && node --check desktop/security.cjs && node --check desktop/preload.cjs"
+  },
+  "devDependencies": {
+    "electron": "43.2.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

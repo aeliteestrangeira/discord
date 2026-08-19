@@ -1,5 +1,6 @@
 param(
-    [int]$Port = 8000
+    [int]$Port = 8000,
+    [switch]$NoBrowser
 )
 $ErrorActionPreference = "Stop"
 
@@ -128,4 +129,6 @@ Write-Host "Servidor iniciado (PID $($proc.Id))."
 $appHost = "discord"
 Write-Host "Login unico: https://${appHost}:$Port/"
 Write-Host "Controle protegido: https://${appHost}:$Port/admin"
-Start-Process "https://${appHost}:$Port/"
+if (-not $NoBrowser) {
+    Start-Process "https://${appHost}:$Port/"
+}

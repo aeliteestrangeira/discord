@@ -195,3 +195,11 @@ Não existem `core/`, `frontend/`, `fonts/`, `templates/`, `tests/`, `architectu
 Os quatro efeitos de mute/unmute ficam centralizados em `assets/js/ui/voice-sounds.js`. Os MP3 não são pré-carregados no shell ocioso; o soundboard é preparado apenas depois que a sessão de voz conecta. O estado lógico não depende do HTML/ícone: `VoiceRuntime.setMicrophoneMuted()` e `VoiceRuntime.setHeadphonesMuted()` executam o áudio e depois sincronizam qualquer controle visual disponível. A aplicação também aceita o evento `app:voice-control`, preparado para futuros botões/HTML.
 
 Ações aceitas em `detail.action`: `mute-microphone`, `unmute-microphone`, `toggle-microphone`, `mute-headphone`, `unmute-headphone`, `toggle-headphone`. O CSP inclui `media-src https://res.cloudinary.com` exclusivamente para permitir esses efeitos de áudio do Cloudinary.
+
+## Aplicativo desktop Electron — fase 1
+
+A partir da versão desktop alpha, `DESKTOP_START.bat` abre **a mesma aplicação Flask** dentro de Electron. O shell desktop não reimplementa a interface: ele prepara o hostname/TLS local, inicia o backend existente em `127.0.0.1:8000`, confirma `/api/desktop/health` e carrega `https://discord:8000/` em uma `BrowserWindow` isolada.
+
+O renderer Electron opera com Node desabilitado, isolamento de contexto, sandbox, `webSecurity`, bloqueio de novas janelas e política de permissões em default-deny. Apenas acesso ao microfone é permitido para a origem local da aplicação, necessário para o recurso de voz. O certificado local nunca é aceito por bypass; a confiança precisa ser instalada corretamente pelo fluxo TLS já existente.
+
+Esta fase ainda é de desenvolvimento desktop. O instalador público/auto-update por GitHub Releases será adicionado depois que o runtime Python e o diretório persistente `instance/` forem separados do diretório de aplicação.

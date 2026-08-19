@@ -8,3 +8,6 @@ instance/*
 !.runtime/.gitkeep
 
 config/SUPABASE_PRIVILEGED.env
+node_modules/
+out/
+*.log
