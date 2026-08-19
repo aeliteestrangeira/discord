@@ -1,6 +1,6 @@
 {
   "name": "discord-local-desktop",
-  "version": "4.2.4",
+  "version": "4.2.5",
   "private": true,
   "description": "Electron desktop shell for the existing local Flask application.",
   "main": "desktop/main.cjs",
@@ -43,7 +43,9 @@
       {
         "from": "build/backend",
         "to": "backend",
-        "filter": ["*.exe"]
+        "filter": [
+          "*.exe"
+        ]
       },
       {
         "from": "priv/scripts/ensure_local_hostname.ps1",
@@ -58,7 +60,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "requestedExecutionLevel": "asInvoker",

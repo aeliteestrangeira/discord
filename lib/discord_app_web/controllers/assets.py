@@ -7,6 +7,13 @@ from lib.discord_app_web.runtime import (
     cloudinary,
 )
 
+PINNED_CLOUDINARY_IMAGE_URLS = {
+    "0082-d8680b1c1576ecc8.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132568/0082-d8680b1c1576ecc8_rrwlpk.svg",
+    "0083-131c318dd45b7aa4.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132620/0083-131c318dd45b7aa4_i9zgvc.svg",
+    "login-qr-icon.png": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132650/login-qr-icon_flnowo.png",
+}
+
+
 def public_root_asset(filename: str):
     if filename not in PUBLIC_ROOT_FILES:
         abort(404)
@@ -30,7 +37,8 @@ def image_asset(filename: str):
     # Keep every captured HTML/CSS URL byte-for-byte intact. While a local
     # migration source directory exists it remains the compatibility fallback;
     # once that heavy directory is removed from deployment, the exact same
-    # /images/<name> URL resolves to the configured Cloudinary asset.
+    # /images/<name> URL resolves to an explicitly pinned Cloudinary delivery
+    # URL first, then the configured dynamic Cloudinary fallback.
     clean = Path(filename).name
     if clean != filename or Path(clean).suffix.lower() not in SUPPORTED_IMAGE_SUFFIXES:
         abort(404)
@@ -38,6 +46,9 @@ def image_asset(filename: str):
     local = STATIC_IMAGES_DIR / canonical
     if local.is_file():
         return send_from_directory(STATIC_IMAGES_DIR, canonical)
+    external_url = PINNED_CLOUDINARY_IMAGE_URLS.get(canonical)
+    if external_url:
+        return redirect(external_url, code=302)
     if cloudinary.configured:
         try:
             return redirect(cloudinary.delivery_url(canonical), code=302)
