@@ -220,3 +220,14 @@ A versao 4.2.4 corrige uma segunda causa de `ENOENT` observada apenas no aplicat
 ## Convergência Web/Desktop planejada
 
 Na linha 4.3.x, o GitHub Pages continua sendo o canal público estático de distribuição/documentação. A convergência da aplicação web real com o Electron fica para a linha 5.x: o mesmo frontend versionado será produzido para Web e Desktop, enquanto autenticação, guilds, administração e operações privilegiadas dependerão de backend HTTPS controlado pelo proprietário. GitHub Pages e o Electron público nunca devem receber `service_role`, senha PostgreSQL, segredo hCaptcha, segredo Cloudinary ou credenciais administrativas.
+
+## GitHub Pages e Desktop
+
+A distribuicao publica usa duas superficies separadas derivadas da mesma UI canonica:
+
+- GitHub Pages publica diretamente a tela do aplicativo, sem landing page, por Deploy de `main`.
+- Electron continua sendo empacotado e atualizado exclusivamente por GitHub Release/tag; o processo desktop nao usa a URL do Pages como `loadURL`.
+- `priv/static/pages/` e `assets/` continuam sendo as fontes canonicas. O builder `priv/scripts/build_pages.py` gera somente o artefato estatico `_site`; os HTML/CSS protegidos nao sao editados.
+- GitHub Pages e hospedagem estatica. Endpoints `/api/...` continuam pertencendo ao backend HTTPS de aplicacao e operacoes privilegiadas do Supabase nunca sao publicadas no cliente.
+
+No desktop/WebView, o carregador hCaptcha envia explicitamente o hostname efetivo no parametro publico `host=` do SDK. A verificacao permanece invisivel, programatica e fail-closed; secret hCaptcha continua exclusivamente no backend.

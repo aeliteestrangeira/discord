@@ -6,7 +6,11 @@ const allowedKeys = new Set([
   "marketingOptIn",
 ]);
 
-const initialPath = location.pathname.toLowerCase();
+const appRootPath = new URL("../", import.meta.url).pathname.toLowerCase();
+const locationPath = location.pathname.toLowerCase();
+const initialPath = locationPath.startsWith(appRootPath)
+  ? `/${locationPath.slice(appRootPath.length)}`
+  : locationPath;
 
 let snapshot = Object.freeze({
   actor: "anonymous-user",

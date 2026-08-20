@@ -4,7 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - "site/**"
+      - "priv/static/pages/**"
+      - "priv/static/fonts/**"
+      - "priv/static/assets/**"
+      - "assets/css/**"
+      - "assets/js/**"
+      - "priv/scripts/build_pages.py"
+      - "test/test_pages_publish.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -26,12 +32,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.14"
+      - name: Verify direct Pages publish
+        run: python -m unittest discover -s test -p "test_pages_publish.py" -v
+      - name: Build direct app artifact
+        run: python priv/scripts/build_pages.py --output _site
       - name: Configure Pages
         uses: actions/configure-pages@v5
-      - name: Upload site artifact
+      - name: Upload app artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: _site
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4

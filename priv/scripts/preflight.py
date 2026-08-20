@@ -104,7 +104,7 @@ def main() -> None:
     captcha_asset = STATIC_ASSETS / "a1c385fb82c39bab.svg"
     if not captcha_asset.is_file():
         fail("asset grafico do modal hCaptcha ausente")
-    if 'src="/assets/a1c385fb82c39bab.svg"' not in ui_bundle:
+    if 'new URL("../assets/a1c385fb82c39bab.svg", import.meta.url).href' not in ui_bundle:
         fail("modal hCaptcha nao referencia o asset grafico esperado")
     for required_class in ["headerGraphic__8a031", "headerGraphicContainer__8a031", "container__8ef77 aspect-ratio-16/9__8ef77", "image__8ef77"]:
         if required_class not in ui_bundle:
@@ -119,7 +119,7 @@ def main() -> None:
         fail("mensagem de credenciais invalidas ausente")
     print("OK estado visual de credenciais invalidas nos dois campos")
 
-    if 'import("/ui/bootstrap.js")' not in ui:
+    if 'import(new URL("ui/bootstrap.js", appRoot).href)' not in ui:
         fail("ui.js nao e o bootstrap modular esperado")
     for module_name in [
         "bootstrap.js", "state.js", "runtime.js", "overlay-manager.js",

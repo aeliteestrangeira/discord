@@ -1,6 +1,15 @@
 import { State } from "./state.js";
 import { replaceTrustedChildren } from "./dom.js";
 
+const APP_ROOT_URL = new URL("../", import.meta.url);
+
+export function appUrl(target) {
+  const raw = String(target || "").trim();
+  if (!raw) return APP_ROOT_URL.href;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("//")) return new URL(raw, APP_ROOT_URL).href;
+  return new URL(raw.startsWith("/") ? raw.slice(1) : raw, APP_ROOT_URL).href;
+}
+
 export function textOf(button) {
   return (button?.textContent || "").replace(/\s+/g, " ").trim();
 }
@@ -81,7 +90,7 @@ export function ensureAuthProvider() {
     }
 
     const script = document.createElement("script");
-    script.src = "/auth-provider.js";
+    script.src = new URL("auth-provider.js", APP_ROOT_URL).href;
     script.async = true;
     script.dataset.appAuthProvider = "true";
     script.addEventListener("load", () => {
@@ -100,7 +109,7 @@ export function ensureAuthProvider() {
 
 export function navigate(target) {
   State.status = "navigating";
-  location.assign(target);
+  location.assign(appUrl(target));
 }
 
 export function wireNavigation() {

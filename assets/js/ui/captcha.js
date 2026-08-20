@@ -30,7 +30,7 @@ function ensureCaptchaCss() {
 
     if (!existing) {
       link.rel = "stylesheet";
-      link.href = "captcha.css";
+      link.href = new URL("../captcha.css", import.meta.url).href;
       link.dataset.appCaptchaCss = "true";
       document.head.appendChild(link);
     }
@@ -101,9 +101,15 @@ function ensureHCaptchaApi() {
     // script-load event alone is not sufficient evidence that render is ready.
     window[HCAPTCHA_ONLOAD_CALLBACK] = ready;
 
+    const sdkHost = String(location.hostname || "").trim().toLowerCase();
     if (!script) {
+      if (!sdkHost) {
+        fail();
+        return;
+      }
+      console.info(`[hcaptcha] sdk-load host=${sdkHost}`);
       script = document.createElement("script");
-      script.src = `https://js.hcaptcha.com/1/api.js?hl=pt-BR&render=explicit&recaptchacompat=off&onload=${encodeURIComponent(HCAPTCHA_ONLOAD_CALLBACK)}`;
+      script.src = `https://js.hcaptcha.com/1/api.js?hl=pt-BR&render=explicit&recaptchacompat=off&host=${encodeURIComponent(sdkHost)}&onload=${encodeURIComponent(HCAPTCHA_ONLOAD_CALLBACK)}`;
       script.async = true;
       script.defer = true;
       script.dataset.appHcaptcha = "true";
@@ -159,7 +165,7 @@ function captchaModalMarkup() {
                   <div class="headerLayout__8a031">
                     <div class="headerLeading__8a031 headerLeadingAbsolute__8a031"></div>
                     <div class="headerLeadingSpacer__8a031" style="height:38px;width:50px;"></div>
-                    <div class="headerMain__8a031"><div class="headerGraphic__8a031"><div class="headerGraphicContainer__8a031"><div class="container__8ef77 aspect-ratio-16/9__8ef77"><img class="image__8ef77" alt="" draggable="false" src="/assets/a1c385fb82c39bab.svg"></div></div></div></div>
+                    <div class="headerMain__8a031"><div class="headerGraphic__8a031"><div class="headerGraphicContainer__8a031"><div class="container__8ef77 aspect-ratio-16/9__8ef77"><img class="image__8ef77" alt="" draggable="false" src="${new URL("../assets/a1c385fb82c39bab.svg", import.meta.url).href}"></div></div></div></div>
                     <div class="headerTrailingSpacer__8a031" style="height:38px;width:50px;"></div>
                     <div class="headerTrailing__8a031 headerTrailingAbsolute__8a031">
                       <button data-mana-component="button" role="button" class="button_a22cb0 md_a22cb0 color-mix_a22cb0" type="button" aria-label="Fechar" data-captcha-close="true"><div class="buttonChildrenWrapper_a22cb0"><div class="buttonChildren_a22cb0"><svg class="icon_a22cb0" aria-hidden="true" role="img" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M19.3 20.7a1 1 0 0 0 1.4-1.4L13.42 12l7.3-7.3a1 1 0 0 0-1.42-1.4L12 10.58l-7.3-7.3a1 1 0 0 0-1.4 1.42L10.58 12l-7.3 7.3a1 1 0 1 0 1.42 1.4L12 13.42l7.3 7.3Z"></path></svg></div></div></button>

@@ -122,8 +122,8 @@ class ArchitectureTests(unittest.TestCase):
 
     def test_frontend_is_split_and_ui_entrypoint_is_loader_only(self):
         ui = (ASSET_JS / "ui.js").read_text(encoding="utf-8")
-        self.assertIn('import("/ui/bootstrap.js")', ui)
-        self.assertLess(len(ui.splitlines()), 30)
+        self.assertIn('import(new URL("ui/bootstrap.js", appRoot).href)', ui)
+        self.assertLess(len(ui.splitlines()), 40)
         for filename in [
             "state.js", "runtime.js", "dom.js", "overlay-manager.js", "sliding-highlight.js",
             "menu-catalog.js", "captcha.js", "register-validation.js", "date-menu.js",

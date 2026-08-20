@@ -12,7 +12,7 @@ class DesktopArchitectureTests(unittest.TestCase):
             "desktop/preload.cjs", "desktop/constants.cjs", "desktop/updater.cjs",
             "desktop/packaged_setup.ps1", "desktop/build_backend.ps1",
             ".github/workflows/pages.yml", ".github/workflows/release-desktop.yml",
-            "site/index.html", "site/site.css", "site/site.js",
+            "priv/scripts/build_pages.py", "test/test_pages_publish.py",
         ):
             self.assertTrue((ROOT / relative).is_file(), relative)
 
@@ -83,11 +83,14 @@ class DesktopArchitectureTests(unittest.TestCase):
         self.assertIn('"electron-updater": "6.8.9"', source)
         self.assertIn('"electron-builder": "26.15.3"', source)
 
-    def test_pages_site_has_no_login_form(self):
-        source = (ROOT / "site/index.html").read_text(encoding="utf-8").lower()
-        self.assertNotIn("<form", source)
-        self.assertNotIn('type="password"', source)
-        self.assertIn("projeto educacional e independente", source)
+    def test_pages_publish_is_generated_from_canonical_app(self):
+        workflow = (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
+        builder = (ROOT / "priv/scripts/build_pages.py").read_text(encoding="utf-8")
+        self.assertFalse((ROOT / "site/index.html").exists())
+        self.assertIn("python priv/scripts/build_pages.py --output _site", workflow)
+        self.assertIn("path: _site", workflow)
+        self.assertIn('"index.html": "login.html"', builder)
+        self.assertIn('STATIC_PAGES = ROOT / "priv" / "static" / "pages"', builder)
 
     def test_pyinstaller_data_sources_are_absolute_before_spec_generation(self):
         source = (ROOT / "desktop/build_backend.ps1").read_text(encoding="utf-8")

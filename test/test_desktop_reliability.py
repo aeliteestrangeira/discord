@@ -13,6 +13,9 @@ class DesktopReliabilityTests(unittest.TestCase):
         self.assertIn("onload=${encodeURIComponent(HCAPTCHA_ONLOAD_CALLBACK)}", captcha)
         self.assertIn("async function prewarmCaptcha()", captcha)
         self.assertIn("await ensureHCaptchaApi();", captcha)
+        self.assertIn('const sdkHost = String(location.hostname || "").trim().toLowerCase();', captcha)
+        self.assertIn("&host=${encodeURIComponent(sdkHost)}", captcha)
+        self.assertIn("[hcaptcha] sdk-load host=${sdkHost}", captcha)
         self.assertNotIn('script.addEventListener("load", () => resolve(window.hcaptcha)', captcha)
         self.assertGreaterEqual(bootstrap.count("prewarmHumanVerification();"), 2)
 
@@ -108,9 +111,9 @@ class DesktopReliabilityTests(unittest.TestCase):
         self.assertNotIn("markChecked();", before_remote)
         self.assertIn("markChecked();", after_remote)
 
-    def test_desktop_release_version_is_4_3_6(self):
+    def test_desktop_release_version_is_4_3_7(self):
         package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-        self.assertEqual(package["version"], "4.3.6")
+        self.assertEqual(package["version"], "4.3.7")
 
 
 if __name__ == "__main__":
