@@ -34,6 +34,14 @@ PINNED_IMAGE_URLS = {
     "login-qr-icon.png": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132650/login-qr-icon_flnowo.png",
 }
 
+# GitHub Project Pages serves this repository below /discord/. Root-relative
+# stylesheet links from the canonical Flask captures would otherwise point to
+# the account site root and return 404. Only the generated Pages copy is changed.
+PAGES_RELATIVE_STYLESHEETS = {
+    'href="/channels.css"': 'href="channels.css"',
+    'href="/guild.css"': 'href="guild.css"',
+}
+
 FROZEN_SOURCE_PATHS = [
     "priv/static/pages/login.html",
     "priv/static/pages/register.html",
@@ -80,6 +88,8 @@ def pages_html(source: Path) -> str:
     text = source.read_text(encoding="utf-8")
     for name, url in PINNED_IMAGE_URLS.items():
         text = text.replace(f'src="images/{name}"', f'src="{url}"')
+    for root_relative, pages_relative in PAGES_RELATIVE_STYLESHEETS.items():
+        text = text.replace(root_relative, pages_relative)
     return text
 
 
