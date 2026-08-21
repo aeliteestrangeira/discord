@@ -21,6 +21,7 @@ PAGE_MAP = {
     "register.html": "register.html",
     "channels.html": "channels.html",
     "guild.html": "guild.html",
+    "admin/index.html": "admin.html",
 }
 
 # The canonical captures intentionally keep their original relative image paths.
@@ -38,11 +39,13 @@ FROZEN_SOURCE_PATHS = [
     "priv/static/pages/register.html",
     "priv/static/pages/channels.html",
     "priv/static/pages/guild.html",
+    "priv/static/pages/admin.html",
     "assets/css/discord.css",
     "assets/css/captcha.css",
     "assets/css/channels.css",
     "assets/css/guild.css",
     "assets/css/admin.css",
+    "assets/css/admin-web.css",
 ]
 
 
@@ -93,7 +96,9 @@ def build(output: Path) -> None:
         source = STATIC_PAGES / source_name
         if not source.is_file():
             raise SystemExit(f"ABORTADO: pagina canonica ausente: {source_name}")
-        (output / destination).write_text(pages_html(source), encoding="utf-8", newline="\n")
+        target = output / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(pages_html(source), encoding="utf-8", newline="\n")
 
     copy_tree_contents(ASSET_CSS, output)
     copy_tree_contents(ASSET_JS, output)

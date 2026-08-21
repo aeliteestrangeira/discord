@@ -8,6 +8,7 @@
   const BOOTSTRAP_PUBLISHABLE_KEY = "sb_publishable_kRPTrvZZfc2kQlYpF-Q9CA_88jZ9YDT";
   const PUBLIC_CONFIG_URL = `${BOOTSTRAP_SUPABASE_URL}/functions/v1/public-config`;
   const USERNAME_AVAILABILITY_URL = `${BOOTSTRAP_SUPABASE_URL}/functions/v1/username-availability`;
+  const ADMIN_GATE_URL = `${BOOTSTRAP_SUPABASE_URL}/functions/v1/admin-gate`;
   const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js";
 
   let configPromise;
@@ -130,6 +131,113 @@
     });
   }
 
+  async function callAdminGate(activeSession) {
+    const cfg = await publicConfig();
+    const token = String(activeSession?.access_token || "");
+    if (!token) {
+      return { status: 401, data: { ok: false, admin: false, error: "missing_token" } };
+    }
+    const response = await fetch(ADMIN_GATE_URL, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+      headers: {
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "apikey": cfg.publishableKey,
+      },
+    });
+    const data = await response.json().catch(() => ({
+      ok: false,
+      admin: false,
+      error: "invalid_admin_response",
+    }));
+    return { status: response.status, data };
+  }
+
+  async function adminGate() {
+    const supabaseClient = await client();
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error || !data?.session) {
+      return { status: 401, data: { ok: false, admin: false, error: "session_missing" } };
+    }
+    return callAdminGate(data.session);
+  }
+
+  async function mfaStatus() {
+    const supabaseClient = await client();
+    const [aalResult, factorsResult] = await Promise.all([
+      supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel(),
+      supabaseClient.auth.mfa.listFactors(),
+    ]);
+    if (aalResult.error || factorsResult.error) {
+      return {
+        data: null,
+        error: {
+          code: aalResult.error?.code || factorsResult.error?.code || "mfa_status_error",
+          message: "NÃ£o foi possÃ­vel consultar o segundo fator.",
+        },
+      };
+    }
+    const factors = Array.isArray(factorsResult.data?.all) ? factorsResult.data.all : [];
+    return {
+      data: {
+        currentLevel: aalResult.data?.currentLevel || "aal1",
+        nextLevel: aalResult.data?.nextLevel || "aal1",
+        factors: factors.map((factor) => ({
+          id: String(factor.id || ""),
+          status: String(factor.status || ""),
+          factorType: String(factor.factor_type || ""),
+          friendlyName: String(factor.friendly_name || ""),
+        })),
+      },
+      error: null,
+    };
+  }
+
+  async function enrollAdminTotp() {
+    const supabaseClient = await client();
+    const { data, error } = await supabaseClient.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: "Discord Web Admin",
+    });
+    if (error || !data?.id || !data?.totp) {
+      return {
+        data: null,
+        error: {
+          code: error?.code || "mfa_enroll_error",
+          message: "NÃ£o foi possÃ­vel iniciar o MFA TOTP.",
+        },
+      };
+    }
+    return {
+      data: {
+        factorId: String(data.id),
+        qrCode: String(data.totp.qr_code || ""),
+        secret: String(data.totp.secret || ""),
+      },
+      error: null,
+    };
+  }
+
+  async function verifyAdminTotp(factorId, code) {
+    const supabaseClient = await client();
+    const { data, error } = await supabaseClient.auth.mfa.challengeAndVerify({
+      factorId: String(factorId || ""),
+      code: String(code || "").replace(/\s+/g, ""),
+    });
+    if (error || !data) {
+      return {
+        data: null,
+        error: {
+          code: error?.code || "mfa_verify_error",
+          message: "CÃ³digo TOTP invÃ¡lido ou expirado.",
+        },
+      };
+    }
+    return { data: { ok: true }, error: null };
+  }
+
   async function profileFor(user) {
     if (!user?.id) return null;
     const supabaseClient = await client();
@@ -242,13 +350,18 @@
     }
 
     const profile = await profileFor(data.user);
+    let adminAccess = null;
+    try {
+      adminAccess = await callAdminGate(data.session);
+    } catch (_) {}
+    const adminEligible = adminAccess?.data?.adminEligible === true || adminAccess?.data?.admin === true;
     return {
       configured: true,
       data: {
         ok: true,
         status: "authenticated",
-        role: "user",
-        redirect: "channels.html",
+        role: adminEligible ? "admin" : "user",
+        redirect: adminEligible ? "/admin" : "channels.html",
         user: normalizeUser(data.user, profile),
       },
       error: null,
@@ -494,6 +607,10 @@
     captchaConfig,
     usernameAvailable,
     suggestUsername,
+    adminGate,
+    mfaStatus,
+    enrollAdminTotp,
+    verifyAdminTotp,
     signIn,
     signUp,
     requestLoginLink,

@@ -484,3 +484,52 @@ revoke all on table public.voice_signals from authenticated;
 revoke all on sequence public.voice_signals_id_seq from public;
 revoke all on sequence public.voice_signals_id_seq from anon;
 revoke all on sequence public.voice_signals_id_seq from authenticated;
+
+-- ============================================================
+-- Consolidated section: Web Admin allowlist and service bridge
+-- ============================================================
+-- Explicit allowlist for the GitHub Pages administrative control plane.
+-- Membership is assigned by UUID only after the owner identity is confirmed.
+create schema if not exists app_private;
+
+create table if not exists app_private.web_admins (
+    user_id uuid primary key references auth.users(id) on delete cascade,
+    enabled boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+revoke all on schema app_private from public;
+revoke all on schema app_private from anon;
+revoke all on schema app_private from authenticated;
+revoke all on table app_private.web_admins from public;
+revoke all on table app_private.web_admins from anon;
+revoke all on table app_private.web_admins from authenticated;
+
+-- Minimal service-only bridge for the admin Edge Function. The app_private
+-- schema remains unexposed to PostgREST and browser roles cannot execute this.
+create or replace function public.web_admin_authorization(p_user_id uuid)
+returns table(enabled boolean, enabled_admins bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select
+    exists (
+      select 1
+      from app_private.web_admins wa
+      where wa.user_id = p_user_id
+        and wa.enabled = true
+    ) as enabled,
+    (
+      select count(*)
+      from app_private.web_admins wa
+      where wa.enabled = true
+    ) as enabled_admins;
+$$;
+
+revoke all on function public.web_admin_authorization(uuid) from public;
+revoke all on function public.web_admin_authorization(uuid) from anon;
+revoke all on function public.web_admin_authorization(uuid) from authenticated;
+grant execute on function public.web_admin_authorization(uuid) to service_role;

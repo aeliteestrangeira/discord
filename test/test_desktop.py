@@ -42,7 +42,8 @@ class DesktopArchitectureTests(unittest.TestCase):
         source = (ROOT / "priv/scripts/generate_integrity_manifest.py").read_text(encoding="utf-8")
         for value in (
             '".env"', '"config/.env"', '"config/SUPABASE_PRIVILEGED.env"',
-            '"instance"', '".runtime"', '".venv"', '"node_modules"', '"out"', '"build"',
+            '"priv/supabase/config.toml"', '"priv/supabase/.gitignore"',
+            '"instance"', '".runtime"', '".temp"', '".venv"', '"node_modules"', '"out"', '"build"',
         ):
             self.assertIn(value, source)
 
