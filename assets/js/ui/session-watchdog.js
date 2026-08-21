@@ -1,10 +1,11 @@
-import { emit } from "./runtime.js";
+import { appUrl, emit } from "./runtime.js";
 import { transitionState } from "./state.js";
 
 const PRESENCE_COOKIE = "app_presence";
 const SESSION_CHANNEL = "app-session-events";
 const VALIDATION_DEBOUNCE_MS = 750;
 const MIN_VALIDATION_GAP_MS = 5000;
+const CLOUD_ORIGIN = "https://aeliteestrangeira.github.io";
 let activeController = null;
 
 function hasPresenceCookie() {
@@ -40,10 +41,11 @@ export function wireSessionWatchdog(authProvider) {
     cleanup();
     transitionState({ status: "session-revoked" }, `session:${code}`);
     emit("app:session-revoked", { code });
-    location.replace("/");
+    location.replace(appUrl("login.html"));
   };
 
   const checkPresence = () => {
+    if (location.origin === CLOUD_ORIGIN) return;
     if (!stopped && !hasPresenceCookie()) revoke("session_cookie_removed");
   };
 

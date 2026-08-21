@@ -1,6 +1,6 @@
 import { OverlayManager } from "./overlay-manager.js";
 import { appendTrustedChildren, replaceTrustedChildren } from "./dom.js";
-import { emit } from "./runtime.js";
+import { appUrl, emit } from "./runtime.js";
 
 const VERIFY_ASSET = "/assets/88cde2b0ab4c8015cee8fdb8732b85b01df4fc78a75b3aa5e621539ea94b1803.svg";
 let activeLayer = null;
@@ -269,7 +269,7 @@ export function showVerificationRequired(authProvider) {
   logout?.addEventListener("click", async (event) => {
     event.preventDefault();
     const result = await authProvider.logout();
-    if (!result.error) location.replace("/");
+    if (!result.error) location.replace(appUrl("login.html"));
   }, { once: true });
   emit("app:verification-required-opened");
 }

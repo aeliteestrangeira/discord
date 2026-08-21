@@ -750,7 +750,7 @@ class ArchitectureTests(unittest.TestCase):
         self.assertIn('window.addEventListener("pageshow", onActivity)', watchdog)
         self.assertIn('window.addEventListener("online", onActivity)', watchdog)
         self.assertIn("new BroadcastChannel(SESSION_CHANNEL)", watchdog)
-        self.assertIn('location.replace("/")', watchdog)
+        self.assertIn('location.replace(appUrl("login.html"))', watchdog)
         self.assertIn('loadModule("session-watchdog")', channels)
         self.assertIn("wireSessionWatchdog(authProvider);", channels)
         self.assertIn('get("/api/session/validate")', auth_provider)

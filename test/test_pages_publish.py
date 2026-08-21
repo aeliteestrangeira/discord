@@ -139,6 +139,16 @@ class PagesPublishTests(unittest.TestCase):
         self.assertIn('location.replace(appUrl("admin/"))', channels)
         self.assertNotIn('location.replace("/")', channels)
 
+    def test_cloud_session_watchdog_does_not_require_local_presence_cookie(self):
+        watchdog = (ROOT / "assets/js/ui/session-watchdog.js").read_text(encoding="utf-8")
+        verification = (ROOT / "assets/js/ui/account-verification.js").read_text(encoding="utf-8")
+        self.assertIn('const CLOUD_ORIGIN = "https://aeliteestrangeira.github.io"', watchdog)
+        self.assertIn("if (location.origin === CLOUD_ORIGIN) return;", watchdog)
+        self.assertIn('location.replace(appUrl("login.html"))', watchdog)
+        self.assertIn('location.replace(appUrl("login.html"))', verification)
+        self.assertNotIn('location.replace("/")', watchdog)
+        self.assertNotIn('location.replace("/")', verification)
+
     def test_channels_hydrates_onboarding_assets_from_cloudinary(self):
         server_entry = (ROOT / "assets/js/ui/server-entry.js").read_text(encoding="utf-8")
         self.assertIn("const ONBOARDING_ASSET_URLS = Object.freeze({", server_entry)
