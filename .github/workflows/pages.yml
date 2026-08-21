@@ -9,6 +9,7 @@ on:
       - "priv/static/assets/**"
       - "assets/css/**"
       - "assets/js/**"
+      - "assets/pages-images/**"
       - "priv/scripts/build_pages.py"
       - "test/test_pages_publish.py"
       - ".github/workflows/pages.yml"
