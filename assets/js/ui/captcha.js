@@ -229,78 +229,129 @@ async function requestCaptchaToken() {
     throw new Error(`Abra a aplicação por ${config.localHostname || "o hostname local configurado"} para usar hCaptcha.`);
   }
 
-  const api = await ensureHCaptchaApi();
-  const mount = document.createElement("div");
-  mount.dataset.appHcaptchaInvisible = "true";
-  document.body.appendChild(mount);
-
-  let widgetId = null;
-  const retryableExecutionErrors = new Set(["challenge-error", "internal-error"]);
-  const normalizeProviderCode = (value) => {
-    const raw = typeof value === "string" ? value : (value?.code || value?.name || "unknown");
-    return String(raw || "unknown").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "unknown";
-  };
-  const providerFailure = (code) => {
-    const error = new Error(
-      code === "rate-limited"
-        ? "Muitas tentativas de confirmação. Aguarde um instante e tente novamente."
-        : "Não foi possível concluir a confirmação humana. Tente novamente."
-    );
-    error.code = `hcaptcha_${code}`;
-    return error;
-  };
-
-  try {
-    widgetId = api.render(mount, {
-      sitekey: config.sitekey,
-      size: "invisible",
-      theme: "light",
-      hl: "pt-BR",
-      "error-callback": (value) => {
-        const code = normalizeProviderCode(value);
-        console.warn(`[hcaptcha] provider-error code=${code} mode=invisible`);
-      },
-      "expired-callback": () => {
-        console.warn("[hcaptcha] token-expired mode=invisible");
-      }
-    });
-
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      try {
-        const execution = await api.execute(widgetId, { async: true });
-        const token = String(execution?.response || "").trim();
-        if (!token) throw "missing-token";
-        console.info(`[hcaptcha] invisible-success attempt=${attempt}`);
-        return token;
-      } catch (value) {
-        const code = normalizeProviderCode(value);
-        if (code === "challenge-closed") {
-          console.info("[hcaptcha] challenge-closed mode=invisible");
-          throw new DOMException("Verificação humana cancelada.", "AbortError");
-        }
-
-        const canRetry = attempt === 1 && retryableExecutionErrors.has(code);
-        if (!canRetry) {
-          console.warn(`[hcaptcha] invisible-failed code=${code} attempt=${attempt}`);
-          throw providerFailure(code);
-        }
-
-        // hCaptcha documents challenge-error/internal-error in fully programmatic
-        // invisible mode as retryable by invoking execute again. The retry is
-        // automatic so one user login intent never turns into a second checkbox click.
-        console.warn(`[hcaptcha] invisible-retry code=${code} attempt=${attempt}`);
-        try { api.reset(widgetId); } catch (_) {}
-        await new Promise((resolve) => window.setTimeout(resolve, 250));
-      }
-    }
-
-    throw providerFailure("unknown");
-  } finally {
-    if (widgetId !== null && api?.remove) {
-      try { api.remove(widgetId); } catch (_) {}
-    }
-    mount.remove();
+  const readiness = await Promise.all([ensureCaptchaCss(), ensureHCaptchaApi()]);
+  const api = readiness[1];
+  const layer = captchaLayer();
+  replaceTrustedChildren(layer, captchaModalMarkup());
+  const dialog = layer.querySelector("#app-hcaptcha-dialog");
+  const mount = layer.querySelector("#app-hcaptcha-mount");
+  const close = layer.querySelector('[data-captcha-close="true"]');
+  const message = layer.querySelector('[data-captcha-message="true"]');
+  if (!mount) {
+    layer.replaceChildren();
+    throw new Error("Contêiner hCaptcha indisponível.");
   }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let widgetId = null;
+    let providerRetryUsed = false;
+    let providerRetryTimer = null;
+
+    const normalizeProviderCode = (value) => {
+      const raw = typeof value === "string" ? value : (value?.code || value?.name || "unknown");
+      return String(raw || "unknown").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "unknown";
+    };
+    const cleanup = () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      if (providerRetryTimer) {
+        window.clearTimeout(providerRetryTimer);
+        providerRetryTimer = null;
+      }
+      if (widgetId !== null && api?.remove) {
+        try { api.remove(widgetId); } catch (_) {}
+      }
+      layer.replaceChildren();
+      OverlayManager.release("hcaptcha");
+    };
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new DOMException("Verificação humana cancelada.", "AbortError"));
+    };
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      cancel();
+    };
+
+    OverlayManager.claim({ id: "hcaptcha", type: "modal", close: cancel });
+    close?.addEventListener("click", cancel, { once: true });
+    document.addEventListener("keydown", onKeyDown, true);
+
+    const nonRecoverableProviderErrors = new Set(["rate-limited", "invalid-data", "script-error"]);
+    const renderWidget = () => {
+      let currentId = null;
+      currentId = api.render(mount, {
+        sitekey: config.sitekey,
+        theme: "light",
+        hl: "pt-BR",
+        callback: (value) => {
+          if (settled) return;
+          const token = String(value || "").trim();
+          if (!token) {
+            if (message) message.textContent = "Não foi possível concluir a confirmação humana. Tente novamente.";
+            return;
+          }
+          settled = true;
+          cleanup();
+          console.info("[hcaptcha] visible-success");
+          resolve(token);
+        },
+        "expired-callback": () => {
+          if (message) message.textContent = "A confirmação expirou. Marque a caixa novamente.";
+          console.warn("[hcaptcha] token-expired mode=visible");
+          try { api.reset(currentId); } catch (_) {}
+        },
+        "error-callback": (value) => {
+          const code = normalizeProviderCode(value);
+          console.warn(`[hcaptcha] provider-error code=${code} mode=visible recovery=${providerRetryUsed ? "used" : "available"}`);
+          if (settled) return;
+
+          const canRecover = !providerRetryUsed && !nonRecoverableProviderErrors.has(code);
+          if (!canRecover) {
+            if (message) {
+              message.textContent = code === "rate-limited"
+                ? "Muitas tentativas de confirmação. Aguarde um instante e tente novamente."
+                : "Não foi possível carregar a confirmação. Tente novamente.";
+            }
+            return;
+          }
+
+          providerRetryUsed = true;
+          if (message) message.textContent = "Reconectando à confirmação...";
+          providerRetryTimer = window.setTimeout(() => {
+            providerRetryTimer = null;
+            if (settled) return;
+            try {
+              if (currentId !== null && api?.remove) api.remove(currentId);
+            } catch (_) {}
+            if (widgetId === currentId) widgetId = null;
+            mount.replaceChildren();
+            try {
+              widgetId = renderWidget();
+              if (message) message.textContent = "";
+              console.info(`[hcaptcha] provider-recovery code=${code} widget=recreated mode=visible`);
+            } catch (_) {
+              if (message) message.textContent = "Não foi possível carregar a confirmação. Tente novamente.";
+              console.warn(`[hcaptcha] provider-recovery-failed code=${code} mode=visible`);
+            }
+          }, 700);
+        }
+      });
+      return currentId;
+    };
+
+    try {
+      widgetId = renderWidget();
+      requestAnimationFrame(() => dialog?.focus({ preventScroll: true }));
+    } catch (error) {
+      settled = true;
+      cleanup();
+      reject(error);
+    }
+  });
 }
 
 
