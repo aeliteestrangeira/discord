@@ -19,16 +19,20 @@ class DesktopReliabilityTests(unittest.TestCase):
         self.assertNotIn('script.addEventListener("load", () => resolve(window.hcaptcha)', captcha)
         self.assertGreaterEqual(bootstrap.count("prewarmHumanVerification();"), 2)
 
-    def test_hcaptcha_uses_invisible_programmatic_single_intent_flow(self):
+    def test_hcaptcha_uses_visible_modal_and_closes_after_success_or_cancel(self):
         captcha = (ROOT / "assets/js/ui/captcha.js").read_text(encoding="utf-8")
-        self.assertIn('size: "invisible"', captcha)
-        self.assertIn("api.execute(widgetId, { async: true })", captcha)
-        self.assertIn('new Set(["challenge-error", "internal-error"])', captcha)
-        self.assertIn("attempt === 1", captcha)
-        self.assertIn("[hcaptcha] invisible-retry code=", captcha)
-        self.assertIn("api.reset(widgetId)", captcha)
-        self.assertNotIn("Clique em Sou humano para continuar.", captcha)
-        self.assertNotIn("renderWidget({ continueFlow: true })", captcha)
+        self.assertIn("Promise.all([ensureCaptchaCss(), ensureHCaptchaApi()])", captcha)
+        self.assertIn("replaceTrustedChildren(layer, captchaModalMarkup())", captcha)
+        self.assertIn('OverlayManager.claim({ id: "hcaptcha", type: "modal", close: cancel })', captcha)
+        self.assertIn('close?.addEventListener("click", cancel, { once: true })', captcha)
+        self.assertIn('document.addEventListener("keydown", onKeyDown, true)', captcha)
+        self.assertIn('OverlayManager.release("hcaptcha")', captcha)
+        self.assertIn('console.info("[hcaptcha] visible-success")', captcha)
+        self.assertIn('mode=visible', captcha)
+        self.assertNotIn('size: "invisible"', captcha)
+        self.assertNotIn("api.execute(widgetId", captcha)
+        success = captcha.split('callback: (value) => {', 1)[1].split('"expired-callback"', 1)[0]
+        self.assertLess(success.index("cleanup();"), success.index("resolve(token);"))
 
     def test_hcaptcha_renderer_diagnostics_are_filtered_into_desktop_log(self):
         main = (ROOT / "desktop/main.cjs").read_text(encoding="utf-8")
