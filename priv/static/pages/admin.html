@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; connect-src https://kwekrdluscriubyfolri.supabase.co wss://kwekrdluscriubyfolri.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
+  <title>Painel administrativo — Discord</title>
+  <link rel="stylesheet" href="../admin-web.css">
+  <script src="../cloud-runtime.js" defer></script>
+  <script src="../admin.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Plano de controle cloud</p>
+      <h1>Painel administrativo</h1>
+    </div>
+    <div class="topbar-actions">
+      <a href="../channels.html">Voltar ao aplicativo</a>
+      <button id="logout-button" class="button secondary" type="button" hidden>Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="notice" class="notice" role="status" aria-live="polite">Validando identidade e autorização…</div>
+
+    <section id="access-section" class="panel" aria-labelledby="access-title">
+      <h2 id="access-title">Controle de acesso</h2>
+      <p id="access-message">Aguarde a validação server-side.</p>
+      <a id="login-link" class="button" href="../login.html" hidden>Entrar</a>
+    </section>
+
+    <section id="mfa-section" class="panel" aria-labelledby="mfa-title" hidden>
+      <p class="eyebrow">Obrigatório para administradores</p>
+      <h2 id="mfa-title">Autenticação multifator TOTP</h2>
+      <p id="mfa-message">Conclua o segundo fator para elevar esta sessão a AAL2.</p>
+      <button id="enroll-button" class="button" type="button" hidden>Ativar MFA TOTP</button>
+
+      <div id="enrollment" class="enrollment" hidden>
+        <p>Leia o QR Code com seu aplicativo autenticador. O segredo abaixo é exibido somente durante esta ativação.</p>
+        <img id="totp-qr" width="220" height="220" alt="QR Code para ativar o segundo fator TOTP">
+        <p class="secret-row"><span>Chave manual:</span> <code id="totp-secret"></code></p>
+      </div>
+
+      <form id="verify-form" class="verify-form" hidden>
+        <label for="totp-code">Código de 6 dígitos</label>
+        <input id="totp-code" name="totp-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+        <button class="button" type="submit">Verificar e acessar</button>
+      </form>
+    </section>
+
+    <section id="dashboard-section" hidden>
+      <div class="panel identity-panel">
+        <div>
+          <p class="eyebrow">Sessão autorizada</p>
+          <h2 id="admin-email">Administrador</h2>
+        </div>
+        <span class="assurance">AAL2</span>
+      </div>
+
+      <div class="metrics" aria-label="Indicadores de identidade">
+        <article class="metric"><span>Contas Auth</span><strong id="metric-users">—</strong></article>
+        <article class="metric"><span>E-mails confirmados</span><strong id="metric-confirmed">—</strong></article>
+        <article class="metric"><span>Admins habilitados</span><strong id="metric-admins">—</strong></article>
+      </div>
+
+      <section class="panel" aria-labelledby="users-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Supabase Auth</p>
+            <h2 id="users-title">Contas cadastradas</h2>
+          </div>
+          <button id="refresh-button" class="button secondary" type="button">Atualizar</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>E-mail</th><th>Usuário</th><th>Confirmação</th><th>Último login</th></tr></thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

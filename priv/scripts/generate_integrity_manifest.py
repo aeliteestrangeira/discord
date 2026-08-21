@@ -7,12 +7,14 @@ ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "HASHES.sha256"
 
 EXCLUDED_DIRS = {
-    ".git", ".venv", ".runtime", "instance", "node_modules", "out", "build", ".pytest_cache", "__pycache__",
+    ".git", ".venv", ".runtime", ".temp", "instance", "node_modules", "out", "build", ".pytest_cache", "__pycache__",
 }
 EXCLUDED_FILES = {
     ".env",
     "config/.env",
     "config/SUPABASE_PRIVILEGED.env",
+    "priv/supabase/.gitignore",
+    "priv/supabase/config.toml",
     "HASHES.sha256",
 }
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
@@ -30,7 +32,7 @@ def is_public_manifest_path(path: Path) -> bool:
     return path.is_file()
 
 LF_TEXT_SUFFIXES = {
-    ".html", ".css", ".js", ".cjs", ".py", ".json", ".yml", ".yaml",
+    ".html", ".css", ".js", ".cjs", ".ts", ".py", ".json", ".yml", ".yaml",
     ".md", ".txt", ".sql", ".ps1", ".svg", ".example",
 }
 LF_TEXT_NAMES = {".gitattributes", ".gitignore"}
