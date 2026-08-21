@@ -6,6 +6,24 @@ const FIRST_SERVER_TIP = "first-server";
 const SKIP_ALL_TIPS = "skip-all";
 const CREATE_SERVER_OVERLAY = "create-server-modal";
 const STEP_HEIGHTS = Object.freeze({ templates: 560, audience: 372, customize: 418, join: 458 });
+const ONBOARDING_ASSET_URLS = Object.freeze({
+  "0209-b30f13ee315c2568.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787287098/0209-b30f13ee315c2568_omv6up.svg",
+  "0211-050c2ac76232eff6.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787287122/0211-050c2ac76232eff6_qeithd.svg",
+  "0212-261f952bf028fa34.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787287130/0212-261f952bf028fa34_prlwae.svg",
+  "0213-4900b53e7b34c3a5.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787287137/0213-4900b53e7b34c3a5_sqpucw.svg",
+  "0214-d804200b134c9327.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787287145/0214-d804200b134c9327_pd4uxa.svg",
+  "0215-2f1587b0c86b42e2.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787287153/0215-2f1587b0c86b42e2_pdjap9.svg",
+  "0216-31f3db39524533b6.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787287161/0216-31f3db39524533b6_clqatd.svg",
+  "0217-d8fed3f03866afe2.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787287169/0217-d8fed3f03866afe2_skk19e.svg",
+});
+
+function hydrateOnboardingAssets(root = document) {
+  for (const image of root.querySelectorAll('img[src*="/images/"]')) {
+    const filename = String(image.getAttribute("src") || "").split("/").at(-1);
+    const cloudinaryUrl = ONBOARDING_ASSET_URLS[filename];
+    if (cloudinaryUrl) image.src = cloudinaryUrl;
+  }
+}
 
 function safeLocalStorageGet(key) {
   try { return localStorage.getItem(key); } catch (_) { return null; }
@@ -216,6 +234,7 @@ function wireCapturedFirstServerModal() {
   const layer = closeButton.closest(".layer_bc663c");
   const container = layer?.parentElement;
   if (!layer || !container) return;
+  hydrateOnboardingAssets(container);
 
   const close = () => {
     layer.remove();
@@ -358,6 +377,7 @@ function wireCreateServerModal(authProvider, user) {
       busy: false,
     };
     replaceTrustedChildren(layer, modalShell(templatesStepMarkup(), STEP_HEIGHTS.templates));
+    hydrateOnboardingAssets(layer);
     let keydown = null;
 
     const close = () => {
@@ -377,6 +397,7 @@ function wireCreateServerModal(authProvider, user) {
       else if (step === "audience") replaceTrustedChildren(frame, audienceStepMarkup());
       else if (step === "join") replaceTrustedChildren(frame, joinServerStepMarkup(state.joinInvite));
       else replaceTrustedChildren(frame, customizeStepMarkup(state.name));
+      hydrateOnboardingAssets(frame);
       frame.style.minHeight = `${STEP_HEIGHTS[step]}px`;
       const slide = frame.querySelector(".slideWrapper__024d4");
       animateStep(slide, direction);
