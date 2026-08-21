@@ -1,0 +1,10 @@
+project_id = "kwekrdluscriubyfolri"
+
+[functions.public-config]
+verify_jwt = false
+
+[functions.username-availability]
+verify_jwt = false
+
+[functions.admin-gate]
+verify_jwt = true

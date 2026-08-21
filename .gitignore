@@ -1,15 +1,8 @@
 .venv/
+.runtime/
 __pycache__/
 *.pyc
 .env
-instance/*
-!instance/.gitkeep
-.runtime/*
-!.runtime/.gitkeep
-
-config/SUPABASE_PRIVILEGED.env
-node_modules/
-out/
 *.log
-build/
 .pytest_cache/
+_site/

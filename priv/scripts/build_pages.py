@@ -25,10 +25,9 @@ PAGE_MAP = {
     "admin/index.html": "admin.html",
 }
 
-# The canonical captures intentionally keep their original relative image paths.
-# Flask resolves these through the pinned Cloudinary fallback. Pages has no Flask,
-# so only the generated deployment copy rewrites those paths. Source HTML remains
-# byte-for-byte unchanged and is verified separately by test_architecture.py.
+# The canonical captures intentionally keep their original image paths. The
+# deployable copy resolves those paths for GitHub Project Pages while the source
+# HTML remains byte-for-byte unchanged.
 PINNED_IMAGE_URLS = {
     "0082-d8680b1c1576ecc8.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132568/0082-d8680b1c1576ecc8_rrwlpk.svg",
     "0083-131c318dd45b7aa4.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132620/0083-131c318dd45b7aa4_i9zgvc.svg",
@@ -36,7 +35,7 @@ PINNED_IMAGE_URLS = {
 }
 
 # GitHub Project Pages serves this repository below /discord/. Root-relative
-# stylesheet links from the canonical Flask captures would otherwise point to
+# stylesheet links from the canonical captures would otherwise point to
 # the account site root and return 404. Only the generated Pages copy is changed.
 PAGES_RELATIVE_STYLESHEETS = {
     'href="/channels.css"': 'href="channels.css"',

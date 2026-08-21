@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "4.3.8";
+  const VERSION = "web-2026.08.21";
   const FRONTEND_ORIGIN = "https://aeliteestrangeira.github.io";
   const APP_BASE_PATH = "/discord/";
   const BOOTSTRAP_SUPABASE_URL = "https://kwekrdluscriubyfolri.supabase.co";
