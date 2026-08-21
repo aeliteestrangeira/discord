@@ -110,6 +110,8 @@ class PagesPublishTests(unittest.TestCase):
         self.assertIn('script.src = new URL("auth-provider.js", APP_ROOT_URL).href;', runtime)
         self.assertIn("location.assign(appUrl(target));", runtime)
         self.assertIn('const appRootPath = new URL("../", import.meta.url).pathname.toLowerCase();', state)
+        self.assertIn('initialPath === "/channels.html"', state)
+        self.assertIn('initialPath.startsWith("/channels/")', state)
         self.assertIn('link.href = new URL("../captcha.css", import.meta.url).href;', captcha)
 
     def test_channels_hydrates_onboarding_assets_from_cloudinary(self):
