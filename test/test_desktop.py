@@ -47,6 +47,8 @@ class DesktopArchitectureTests(unittest.TestCase):
         ):
             self.assertIn(value, source)
         self.assertIn('".ts"', source)
+        verifier = (ROOT / "verify_integrity.py").read_text(encoding="utf-8")
+        self.assertIn('".ts"', verifier)
 
     def test_restart_script_can_suppress_external_browser(self):
         source = (ROOT / "priv/scripts/restart_server.ps1").read_text(encoding="utf-8")

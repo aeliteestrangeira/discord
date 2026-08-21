@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parent
 manifest = ROOT / "HASHES.sha256"
 
 LF_TEXT_SUFFIXES = {
-    ".html", ".css", ".js", ".cjs", ".py", ".json", ".yml", ".yaml",
+    ".html", ".css", ".js", ".cjs", ".ts", ".py", ".json", ".yml", ".yaml",
     ".md", ".txt", ".sql", ".ps1", ".svg", ".example",
 }
 LF_TEXT_NAMES = {".gitattributes", ".gitignore"}
