@@ -45,9 +45,7 @@ PAGES_RELATIVE_STYLESHEETS = {
 # Some canonical captures are intentionally static snapshots and do not carry
 # the application bootstrap tag. Inject it only into the generated Pages copy
 # so profile/session hydration works without modifying the frozen HTML source.
-PAGES_RUNTIME_SCRIPTS = {
-    "channels.html": '<script src="ui.js" defer></script>',
-}
+PAGES_RUNTIME_PAGES = {"channels.html"}
 
 FROZEN_SOURCE_PATHS = [
     "priv/static/pages/login.html",
@@ -66,6 +64,16 @@ FROZEN_SOURCE_PATHS = [
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def pages_runtime_digest() -> str:
+    digest = hashlib.sha256()
+    for path in sorted(ASSET_JS.rglob("*.js"), key=lambda p: p.relative_to(ASSET_JS).as_posix()):
+        digest.update(path.relative_to(ASSET_JS).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()[:16]
 
 
 def source_commit() -> str:
@@ -91,14 +99,14 @@ def copy_tree_contents(source: Path, destination: Path) -> None:
         shutil.copy2(item, target)
 
 
-def pages_html(source: Path, destination: str) -> str:
+def pages_html(source: Path, destination: str, runtime_path: str) -> str:
     text = source.read_text(encoding="utf-8")
     for name, url in PINNED_IMAGE_URLS.items():
         text = text.replace(f'src="images/{name}"', f'src="{url}"')
     for root_relative, pages_relative in PAGES_RELATIVE_STYLESHEETS.items():
         text = text.replace(root_relative, pages_relative)
-    runtime_script = PAGES_RUNTIME_SCRIPTS.get(destination)
-    if runtime_script and runtime_script not in text:
+    runtime_script = f'<script src="{runtime_path}/ui.js" defer></script>'
+    if destination in PAGES_RUNTIME_PAGES and runtime_script not in text:
         text = text.replace("</body>", f"{runtime_script}</body>")
     return text
 
@@ -111,6 +119,7 @@ def build(output: Path) -> None:
         shutil.rmtree(output)
     output.mkdir(parents=True)
     (output / ".nojekyll").write_text("", encoding="utf-8")
+    runtime_path = f"runtime/{pages_runtime_digest()}"
 
     for destination, source_name in PAGE_MAP.items():
         source = STATIC_PAGES / source_name
@@ -118,10 +127,12 @@ def build(output: Path) -> None:
             raise SystemExit(f"ABORTADO: pagina canonica ausente: {source_name}")
         target = output / destination
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(pages_html(source, destination), encoding="utf-8", newline="\n")
+        target.write_text(pages_html(source, destination, runtime_path), encoding="utf-8", newline="\n")
 
     copy_tree_contents(ASSET_CSS, output)
     copy_tree_contents(ASSET_JS, output)
+    copy_tree_contents(ASSET_JS, output / runtime_path)
+    shutil.copy2(ASSET_CSS / "captcha.css", output / runtime_path / "captcha.css")
     copy_tree_contents(STATIC_FONTS, output / "fonts")
     copy_tree_contents(STATIC_ASSETS, output / "assets")
 
