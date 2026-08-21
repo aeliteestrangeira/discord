@@ -1,11 +1,11 @@
-import { emit } from "./runtime.js";
+import { appUrl, emit } from "./runtime.js";
 import { VOICE_CAPTURE } from "./voice-capture.js";
 import { trustedElement } from "./dom.js";
 import { voiceControlSoundboard } from "./voice-sounds.js";
 
 const POLL_MS = 1000;
 const PING_MS = 3000;
-const FALLBACK_AVATAR = "/images/0208-2ccd8ae8b2379360.png";
+const FALLBACK_AVATAR = appUrl("images/0208-2ccd8ae8b2379360.png");
 let activeVoiceRuntime = null;
 
 function readGuildBootstrap() {
