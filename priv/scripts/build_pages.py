@@ -42,6 +42,13 @@ PAGES_RELATIVE_STYLESHEETS = {
     'href="/guild.css"': 'href="guild.css"',
 }
 
+# Some canonical captures are intentionally static snapshots and do not carry
+# the application bootstrap tag. Inject it only into the generated Pages copy
+# so profile/session hydration works without modifying the frozen HTML source.
+PAGES_RUNTIME_SCRIPTS = {
+    "channels.html": '<script src="ui.js" defer></script>',
+}
+
 FROZEN_SOURCE_PATHS = [
     "priv/static/pages/login.html",
     "priv/static/pages/register.html",
@@ -84,12 +91,15 @@ def copy_tree_contents(source: Path, destination: Path) -> None:
         shutil.copy2(item, target)
 
 
-def pages_html(source: Path) -> str:
+def pages_html(source: Path, destination: str) -> str:
     text = source.read_text(encoding="utf-8")
     for name, url in PINNED_IMAGE_URLS.items():
         text = text.replace(f'src="images/{name}"', f'src="{url}"')
     for root_relative, pages_relative in PAGES_RELATIVE_STYLESHEETS.items():
         text = text.replace(root_relative, pages_relative)
+    runtime_script = PAGES_RUNTIME_SCRIPTS.get(destination)
+    if runtime_script and runtime_script not in text:
+        text = text.replace("</body>", f"{runtime_script}</body>")
     return text
 
 
@@ -108,7 +118,7 @@ def build(output: Path) -> None:
             raise SystemExit(f"ABORTADO: pagina canonica ausente: {source_name}")
         target = output / destination
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(pages_html(source), encoding="utf-8", newline="\n")
+        target.write_text(pages_html(source, destination), encoding="utf-8", newline="\n")
 
     copy_tree_contents(ASSET_CSS, output)
     copy_tree_contents(ASSET_JS, output)

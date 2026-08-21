@@ -31,6 +31,8 @@ class PagesPublishTests(unittest.TestCase):
             self.assertTrue((output / "guild.html").is_file())
             channels_html = (output / "channels.html").read_text(encoding="utf-8")
             guild_html = (output / "guild.html").read_text(encoding="utf-8")
+            self.assertIn('<script src="ui.js" defer></script>', channels_html)
+            self.assertNotIn('<script src="ui.js" defer></script>', (ROOT / "priv/static/pages/channels.html").read_text(encoding="utf-8"))
             self.assertIn('href="channels.css"', channels_html)
             self.assertNotIn('href="/channels.css"', channels_html)
             self.assertIn('href="guild.css"', guild_html)
