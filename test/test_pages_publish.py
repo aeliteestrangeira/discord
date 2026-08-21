@@ -133,6 +133,12 @@ class PagesPublishTests(unittest.TestCase):
         self.assertIn('new URL(location.href).searchParams.has("code")', bootstrap)
         self.assertIn('location.replace("channels.html")', bootstrap)
 
+    def test_channels_redirects_remain_inside_project_pages(self):
+        channels = (ROOT / "assets/js/ui/channels.js").read_text(encoding="utf-8")
+        self.assertIn('location.replace(appUrl("login.html"))', channels)
+        self.assertIn('location.replace(appUrl("admin/"))', channels)
+        self.assertNotIn('location.replace("/")', channels)
+
     def test_channels_hydrates_onboarding_assets_from_cloudinary(self):
         server_entry = (ROOT / "assets/js/ui/server-entry.js").read_text(encoding="utf-8")
         self.assertIn("const ONBOARDING_ASSET_URLS = Object.freeze({", server_entry)

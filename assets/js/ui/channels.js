@@ -1,5 +1,5 @@
 import { State, transitionState } from "./state.js";
-import { emit, ensureAuthProvider } from "./runtime.js";
+import { appUrl, emit, ensureAuthProvider } from "./runtime.js";
 
 function resolvedUsername(user) {
   const explicit = String(user?.username || "").trim().toLowerCase();
@@ -28,11 +28,11 @@ async function resolveSession(authProvider) {
   const bootstrapped = readSessionBootstrap();
   const session = bootstrapped || await authProvider.session();
   if (!session?.authenticated) {
-    location.replace("/");
+    location.replace(appUrl("login.html"));
     return null;
   }
   if (session.role === "admin") {
-    location.replace("/admin");
+    location.replace(appUrl("admin/"));
     return null;
   }
   return session;
