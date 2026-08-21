@@ -105,6 +105,7 @@ def pages_html(source: Path, destination: str, runtime_path: str) -> str:
         text = text.replace(f'src="images/{name}"', f'src="{url}"')
     for root_relative, pages_relative in PAGES_RELATIVE_STYLESHEETS.items():
         text = text.replace(root_relative, pages_relative)
+    text = text.replace('src="ui.js"', f'src="{runtime_path}/ui.js"')
     runtime_script = f'<script src="{runtime_path}/ui.js" defer></script>'
     if destination in PAGES_RUNTIME_PAGES and runtime_script not in text:
         text = text.replace("</body>", f"{runtime_script}</body>")

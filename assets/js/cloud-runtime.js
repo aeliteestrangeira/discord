@@ -106,7 +106,7 @@
           auth: {
             persistSession: true,
             autoRefreshToken: true,
-            detectSessionInUrl: true,
+            detectSessionInUrl: false,
             flowType: "pkce",
           },
           global: {
@@ -480,6 +480,14 @@
 
   async function session() {
     const supabaseClient = await client();
+    const callbackUrl = new URL(location.href);
+    const authCode = String(callbackUrl.searchParams.get("code") || "").trim();
+    if (authCode) {
+      const { error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(authCode);
+      callbackUrl.searchParams.delete("code");
+      history.replaceState(history.state, "", `${callbackUrl.pathname}${callbackUrl.search}${callbackUrl.hash}`);
+      if (exchangeError) return { authenticated: false, role: "anonymous" };
+    }
     const { data, error } = await supabaseClient.auth.getSession();
     if (error || !data?.session?.user) return { authenticated: false, role: "anonymous" };
     const profile = await profileFor(data.session.user);
