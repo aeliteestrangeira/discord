@@ -163,6 +163,7 @@ class PagesPublishTests(unittest.TestCase):
     def test_channels_hydrates_onboarding_assets_from_cloudinary(self):
         server_entry = (ROOT / "assets/js/ui/server-entry.js").read_text(encoding="utf-8")
         self.assertIn("const ONBOARDING_ASSET_URLS = Object.freeze({", server_entry)
+        self.assertIn('querySelectorAll(\'img[src*="images/"]\')', server_entry)
         self.assertIn("hydrateOnboardingAssets(container);", server_entry)
         self.assertIn("hydrateOnboardingAssets(frame);", server_entry)
         for name in ["0209-b30f13ee315c2568", "0211-050c2ac76232eff6", "0212-261f952bf028fa34",
