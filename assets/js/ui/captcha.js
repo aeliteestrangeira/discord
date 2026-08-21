@@ -45,6 +45,39 @@ function ensureCaptchaCss() {
 
 async function getCaptchaConfig() {
   if (!captchaConfigPromise) {
+    const isCloud = location.origin === "https://aeliteestrangeira.github.io" &&
+      location.pathname.toLowerCase().startsWith("/discord/");
+    if (isCloud) {
+      captchaConfigPromise = new Promise((resolve, reject) => {
+        if (window.AppCloudRuntime?.captchaConfig) {
+          window.AppCloudRuntime.captchaConfig().then(resolve, reject);
+          return;
+        }
+        const existing = document.querySelector('script[data-app-cloud-runtime="true"]');
+        const script = existing || document.createElement("script");
+        const loaded = () => {
+          if (!window.AppCloudRuntime?.captchaConfig) {
+            reject(new Error("Cloud runtime indisponível."));
+            return;
+          }
+          window.AppCloudRuntime.captchaConfig().then(resolve, reject);
+        };
+        script.addEventListener("load", loaded, { once: true });
+        script.addEventListener("error", () => reject(new Error("Falha ao carregar cloud runtime.")), { once: true });
+        if (!existing) {
+          script.src = new URL("../cloud-runtime.js", import.meta.url).href;
+          script.async = true;
+          script.dataset.appCloudRuntime = "true";
+          document.head.appendChild(script);
+        } else if (window.AppCloudRuntime?.captchaConfig) {
+          loaded();
+        }
+      }).catch((error) => {
+        captchaConfigPromise = undefined;
+        throw error;
+      });
+      return captchaConfigPromise;
+    }
     captchaConfigPromise = fetch("/api/security/hcaptcha", {
       credentials: "same-origin",
       cache: "no-store",

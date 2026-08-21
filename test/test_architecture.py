@@ -23,6 +23,10 @@ STATIC_ASSETS = ROOT / "priv" / "static" / "assets"
 PRIV_ARCH = ROOT / "priv" / "architecture"
 PRIV_SUPABASE_MIGRATIONS = ROOT / "priv" / "supabase" / "migrations"
 PRIV_SCRIPTS = ROOT / "priv" / "scripts"
+GENERATED_TREE_PARTS = {
+    ".git", ".venv", ".runtime", "instance", "node_modules", "out", "build",
+    ".pytest_cache", "__pycache__",
+}
 
 WEB_SOURCE_ORDER = [
     WEB_LIB / "runtime.py", WEB_LIB / "registration.py", WEB_LIB / "security.py",
@@ -967,19 +971,27 @@ class ArchitectureTests(unittest.TestCase):
         self.assertIn("document.createDocumentFragment()", dom_source)
 
     def test_repository_cleanup_rules_are_enforced(self):
-        markdown = sorted(path.relative_to(ROOT).as_posix() for path in ROOT.rglob("*.md"))
+        markdown = sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in ROOT.rglob("*.md")
+            if not any(part in GENERATED_TREE_PARTS for part in path.relative_to(ROOT).parts)
+        )
         self.assertEqual(markdown, ["README.md"])
-        sql_files = sorted(path.relative_to(ROOT).as_posix() for path in ROOT.rglob("*.sql"))
+        sql_files = sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in ROOT.rglob("*.sql")
+            if not any(part in GENERATED_TREE_PARTS for part in path.relative_to(ROOT).parts)
+        )
         self.assertEqual(sql_files, ["priv/supabase/migrations/000_current_schema.sql"])
         self.assertFalse((ROOT / "source-manifests").exists())
         self.assertFalse((PRIV_ARCH / "asset-manifest.json").exists())
         self.assertFalse((PRIV_ARCH / "server-capture-manifest.json").exists())
         for path in ROOT.rglob("*"):
+            relative = path.relative_to(ROOT)
             if (
                 not path.is_file()
                 or path.name == "SUPABASE_PRIVILEGED.env"
-                or "instance" in path.parts
-                or "__pycache__" in path.parts
+                or any(part in GENERATED_TREE_PARTS for part in relative.parts)
                 or path.suffix.lower() in {".pyc", ".pyo"}
             ):
                 continue
@@ -1143,4 +1155,3 @@ class ElixirLayoutAndVoiceAudioTests(unittest.TestCase):
         self.assertIn('window.addEventListener("app:voice-control"', voice)
         self.assertIn("voiceControlSoundboard.microphone", voice)
         self.assertIn("voiceControlSoundboard.headphone", voice)
-
