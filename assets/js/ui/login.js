@@ -182,7 +182,10 @@ function wireForgotPassword(credentialErrors) {
     State.status = "requesting-login-link";
     try {
       const authProvider = await ensureAuthProvider();
-      const result = await authProvider.requestLoginLink(value);
+      const hcaptchaToken = location.origin === "https://aeliteestrangeira.github.io"
+        ? await requestLoginCaptchaToken()
+        : "";
+      const result = await authProvider.requestLoginLink(value, hcaptchaToken);
       if (!result.configured) {
         State.status = "ready-for-auth-provider";
         emit("app:auth-unconfigured", { type: "login-link" });

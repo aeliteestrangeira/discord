@@ -2,6 +2,45 @@
   "use strict";
 
   let csrfPromise;
+  let cloudRuntimePromise;
+
+  function isCloudMode() {
+    return location.origin === "https://aeliteestrangeira.github.io" &&
+      location.pathname.toLowerCase().startsWith("/discord/");
+  }
+
+  function ensureCloudRuntime() {
+    if (window.AppCloudRuntime) return Promise.resolve(window.AppCloudRuntime);
+    if (cloudRuntimePromise) return cloudRuntimePromise;
+    cloudRuntimePromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-app-cloud-runtime="true"]');
+      const script = existing || document.createElement("script");
+      const current = document.querySelector('script[data-app-auth-provider="true"]');
+
+      const loaded = () => {
+        if (!window.AppCloudRuntime) {
+          reject(new Error("Cloud runtime indisponível."));
+          return;
+        }
+        resolve(window.AppCloudRuntime);
+      };
+      script.addEventListener("load", loaded, { once: true });
+      script.addEventListener("error", () => reject(new Error("Falha ao carregar cloud runtime.")), { once: true });
+
+      if (!existing) {
+        script.src = new URL("cloud-runtime.js", current?.src || location.href).href;
+        script.async = true;
+        script.dataset.appCloudRuntime = "true";
+        document.head.appendChild(script);
+      } else if (window.AppCloudRuntime) {
+        loaded();
+      }
+    }).catch((error) => {
+      cloudRuntimePromise = undefined;
+      throw error;
+    });
+    return cloudRuntimePromise;
+  }
 
   function broadcastSessionRevoked() {
     try {
@@ -62,6 +101,7 @@
   }
 
   async function signIn(identifier, password, hcaptchaToken) {
+    if (isCloudMode()) return (await ensureCloudRuntime()).signIn(identifier, password, hcaptchaToken);
     const { response, body } = await post("/api/auth/login", { identifier, password, hcaptchaToken });
     if (!body.configured && response.status === 503) {
       return { configured: false, data: null, error: body.error || null };
@@ -73,6 +113,7 @@
   }
 
   async function signUp(email, password, profile, marketingOptIn, hcaptchaToken) {
+    if (isCloudMode()) return (await ensureCloudRuntime()).signUp(email, password, profile, marketingOptIn, hcaptchaToken);
     const { response, body } = await post("/api/auth/register", { email, password, profile, marketingOptIn, hcaptchaToken });
     if (!body.configured && response.status === 503) {
       return { configured: false, data: null, error: body.error || null };
@@ -84,6 +125,7 @@
   }
 
   async function checkUsername(username) {
+    if (isCloudMode()) return (await ensureCloudRuntime()).usernameAvailable(username);
     const { response, body } = await post("/api/auth/username/check", { username });
     if (!response.ok || !body.ok) {
       return { available: null, error: body.error || { code: "username_check_error", message: "Não foi possível verificar o nome de usuário." } };
@@ -92,6 +134,7 @@
   }
 
   async function suggestUsername(displayName) {
+    if (isCloudMode()) return (await ensureCloudRuntime()).suggestUsername(displayName);
     const { response, body } = await post("/api/auth/username/suggest", { displayName });
     if (!response.ok || !body.ok) {
       return { suggestion: null, error: body.error || { code: "username_suggestion_error", message: "Não foi possível gerar uma sugestão." } };
@@ -101,6 +144,7 @@
 
 
   async function requestLoginLink(identifier) {
+    if (isCloudMode()) return (await ensureCloudRuntime()).requestLoginLink(identifier, arguments[1]);
     const { response, body } = await post("/api/auth/login-link", { identifier });
     if (!body.configured && response.status === 503) {
       return { configured: false, data: null, error: body.error || null };
@@ -113,6 +157,7 @@
 
 
   async function startPasskeyAuthentication() {
+    if (isCloudMode()) return (await ensureCloudRuntime()).startPasskeyAuthentication();
     const { response, body } = await post("/api/auth/passkey/options", {});
     if (!body.configured && response.status === 503) {
       return { configured: false, data: null, error: body.error || null };
@@ -124,6 +169,7 @@
   }
 
   async function verifyPasskeyAuthentication(challengeId, credential) {
+    if (isCloudMode()) return (await ensureCloudRuntime()).verifyPasskeyAuthentication(challengeId, credential);
     const { response, body } = await post("/api/auth/passkey/verify", { challengeId, credential });
     if (!body.configured && response.status === 503) {
       return { configured: false, data: null, error: body.error || null };
@@ -135,11 +181,13 @@
   }
 
   async function session() {
+    if (isCloudMode()) return (await ensureCloudRuntime()).session();
     const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
     return response.ok ? response.json() : { authenticated: false };
   }
 
   async function validateSession() {
+    if (isCloudMode()) return (await ensureCloudRuntime()).validateSession();
     const { response, body } = await get("/api/session/validate");
     if (!response.ok || !body.ok || body.authenticated !== true) {
       return { data: null, error: body.error || { code: "session_revoked", message: "A sessão não é mais válida." }, status: response.status };
@@ -148,6 +196,7 @@
   }
 
   async function verificationStatus() {
+    if (isCloudMode()) return (await ensureCloudRuntime()).verificationStatus();
     const { response, body } = await post("/api/auth/verification/status", {});
     if (!response.ok || !body.ok) {
       return { data: null, error: body.error || { code: "verification_status_error", message: "Não foi possível atualizar a verificação." } };
@@ -156,6 +205,7 @@
   }
 
   async function resendConfirmation() {
+    if (isCloudMode()) return (await ensureCloudRuntime()).resendConfirmation();
     const { response, body } = await post("/api/auth/resend-confirmation", {});
     if (!response.ok || !body.ok) {
       return { data: null, error: body.error || { code: "resend_confirmation_error", message: "Não foi possível reenviar o e-mail." } };
@@ -262,6 +312,7 @@
   }
 
   async function changeEmail(email, password) {
+    if (isCloudMode()) return (await ensureCloudRuntime()).changeEmail(email, password);
     const { response, body } = await post("/api/auth/change-email", { email, password });
     if (!response.ok || !body.ok) {
       return { data: null, error: body.error || { code: "email_change_error", message: "Não foi possível alterar o e-mail." } };
@@ -270,6 +321,7 @@
   }
 
   async function logout() {
+    if (isCloudMode()) return (await ensureCloudRuntime()).logout();
     const { response, body } = await post("/api/auth/logout", {});
     if (!response.ok || !body.ok) {
       return { data: null, error: body.error || { code: "logout_error", message: "Não foi possível sair agora." } };

@@ -29,8 +29,8 @@ PAGE_MAP = {
 # byte-for-byte unchanged and is verified separately by test_architecture.py.
 PINNED_IMAGE_URLS = {
     "0082-d8680b1c1576ecc8.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132568/0082-d8680b1c1576ecc8_rrwlpk.svg",
-    "0083-131c318dd45b7aa4.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132569/0083-131c318dd45b7aa4_i9zgvc.svg",
-    "login-qr-icon.png": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132569/login-qr-icon_cxxqbn.png",
+    "0083-131c318dd45b7aa4.svg": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132620/0083-131c318dd45b7aa4_i9zgvc.svg",
+    "login-qr-icon.png": "https://res.cloudinary.com/do7vwsnpg/image/upload/v1787132650/login-qr-icon_flnowo.png",
 }
 
 FROZEN_SOURCE_PATHS = [

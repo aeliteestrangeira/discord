@@ -111,9 +111,9 @@ class DesktopReliabilityTests(unittest.TestCase):
         self.assertNotIn("markChecked();", before_remote)
         self.assertIn("markChecked();", after_remote)
 
-    def test_desktop_release_version_is_4_3_7(self):
+    def test_desktop_release_version_is_4_3_8(self):
         package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-        self.assertEqual(package["version"], "4.3.7")
+        self.assertEqual(package["version"], "4.3.8")
 
 
 if __name__ == "__main__":
