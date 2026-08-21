@@ -1,7 +1,10 @@
 import { State } from "./state.js";
 import { replaceTrustedChildren } from "./dom.js";
 
-const APP_ROOT_URL = new URL("../", import.meta.url);
+const MODULE_ROOT_URL = new URL("../", import.meta.url);
+const APP_ROOT_URL = /\/runtime\/[a-f0-9]{16}\/$/.test(MODULE_ROOT_URL.pathname)
+  ? new URL("../../", MODULE_ROOT_URL)
+  : MODULE_ROOT_URL;
 
 export function appUrl(target) {
   const raw = String(target || "").trim();

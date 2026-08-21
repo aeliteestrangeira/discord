@@ -6,13 +6,18 @@ const allowedKeys = new Set([
   "marketingOptIn",
 ]);
 
-const appRootPath = new URL("../", import.meta.url).pathname.toLowerCase();
+const moduleRootUrl = new URL("../", import.meta.url);
+const appRootUrl = /\/runtime\/[a-f0-9]{16}\/$/.test(moduleRootUrl.pathname)
+  ? new URL("../../", moduleRootUrl)
+  : moduleRootUrl;
+const appRootPath = appRootUrl.pathname.toLowerCase();
 const locationPath = location.pathname.toLowerCase();
 const initialPath = locationPath.startsWith(appRootPath)
   ? `/${locationPath.slice(appRootPath.length)}`
   : locationPath;
-const isChannelsPath = initialPath === "/channels"
-  || initialPath === "/channels.html"
+const routeName = initialPath.split("/").filter(Boolean).at(-1) || "";
+const isChannelsPath = routeName === "channels"
+  || routeName === "channels.html"
   || initialPath.startsWith("/channels/");
 
 let snapshot = Object.freeze({
