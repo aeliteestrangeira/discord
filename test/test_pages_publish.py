@@ -112,6 +112,17 @@ class PagesPublishTests(unittest.TestCase):
         self.assertIn('const appRootPath = new URL("../", import.meta.url).pathname.toLowerCase();', state)
         self.assertIn('link.href = new URL("../captcha.css", import.meta.url).href;', captcha)
 
+    def test_channels_hydrates_onboarding_assets_from_cloudinary(self):
+        server_entry = (ROOT / "assets/js/ui/server-entry.js").read_text(encoding="utf-8")
+        self.assertIn("const ONBOARDING_ASSET_URLS = Object.freeze({", server_entry)
+        self.assertIn("hydrateOnboardingAssets(container);", server_entry)
+        self.assertIn("hydrateOnboardingAssets(frame);", server_entry)
+        for name in ["0209-b30f13ee315c2568", "0211-050c2ac76232eff6", "0212-261f952bf028fa34",
+                     "0213-4900b53e7b34c3a5", "0214-d804200b134c9327", "0215-2f1587b0c86b42e2",
+                     "0216-31f3db39524533b6", "0217-d8fed3f03866afe2"]:
+            self.assertIn(f"https://res.cloudinary.com/do7vwsnpg/image/upload/", server_entry)
+            self.assertIn(name, server_entry)
+
     def test_cloud_admin_requires_server_allowlist_and_mfa_aal2(self):
         edge = (ROOT / "priv/supabase/functions/admin-gate/index.ts").read_text(encoding="utf-8")
         schema = (ROOT / "priv/supabase/migrations/000_current_schema.sql").read_text(encoding="utf-8")
