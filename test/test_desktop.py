@@ -46,6 +46,7 @@ class DesktopArchitectureTests(unittest.TestCase):
             '"instance"', '".runtime"', '".temp"', '".venv"', '"node_modules"', '"out"', '"build"',
         ):
             self.assertIn(value, source)
+        self.assertIn('".ts"', source)
 
     def test_restart_script_can_suppress_external_browser(self):
         source = (ROOT / "priv/scripts/restart_server.ps1").read_text(encoding="utf-8")

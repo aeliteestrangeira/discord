@@ -32,7 +32,7 @@ def is_public_manifest_path(path: Path) -> bool:
     return path.is_file()
 
 LF_TEXT_SUFFIXES = {
-    ".html", ".css", ".js", ".cjs", ".py", ".json", ".yml", ".yaml",
+    ".html", ".css", ".js", ".cjs", ".ts", ".py", ".json", ".yml", ".yaml",
     ".md", ".txt", ".sql", ".ps1", ".svg", ".example",
 }
 LF_TEXT_NAMES = {".gitattributes", ".gitignore"}
