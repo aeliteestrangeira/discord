@@ -18,7 +18,7 @@ const ONBOARDING_ASSET_URLS = Object.freeze({
 });
 
 function hydrateOnboardingAssets(root = document) {
-  for (const image of root.querySelectorAll('img[src*="/images/"]')) {
+  for (const image of root.querySelectorAll('img[src*="images/"]')) {
     const filename = String(image.getAttribute("src") || "").split("/").at(-1);
     const cloudinaryUrl = ONBOARDING_ASSET_URLS[filename];
     if (cloudinaryUrl) image.src = cloudinaryUrl;
