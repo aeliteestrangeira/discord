@@ -11,10 +11,13 @@ const locationPath = location.pathname.toLowerCase();
 const initialPath = locationPath.startsWith(appRootPath)
   ? `/${locationPath.slice(appRootPath.length)}`
   : locationPath;
+const isChannelsPath = initialPath === "/channels"
+  || initialPath === "/channels.html"
+  || initialPath.startsWith("/channels/");
 
 let snapshot = Object.freeze({
   actor: "anonymous-user",
-  page: initialPath.startsWith("/channels/") ? "channels" : (initialPath.includes("register") ? "register" : "login"),
+  page: isChannelsPath ? "channels" : (initialPath.includes("register") ? "register" : "login"),
   status: "idle",
   dateOfBirth: null,
   marketingOptIn: null,
