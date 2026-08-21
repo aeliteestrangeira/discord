@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -39,6 +40,16 @@ class PagesPublishTests(unittest.TestCase):
             self.assertNotIn('href="/guild.css"', guild_html)
             self.assertTrue((output / "channels.css").is_file())
             self.assertTrue((output / "guild.css").is_file())
+            self.assertTrue((output / "images/0206-c6a249645d46209f337279cd2ca998c7.webp").is_file())
+            self.assertTrue((output / "images/0207-c6a249645d46209f337279cd2ca998c7.webp").is_file())
+            self.assertTrue((output / "images/0208-2ccd8ae8b2379360.png").is_file())
+            self.assertTrue((output / "images/0210-25c27c1328c986f6.svg").is_file())
+            self.assertNotIn('src="/images/', channels_html)
+            referenced_images = set(re.findall(r'images/([^"\')]+)', channels_html))
+            referenced_images.update(re.findall(r'images/([^"\')]+)', (output / "channels.css").read_text(encoding="utf-8")))
+            self.assertEqual(len(referenced_images), 150)
+            for name in referenced_images:
+                self.assertTrue((output / "images" / name).is_file(), name)
             self.assertTrue((output / "admin/index.html").is_file())
             self.assertTrue((output / "ui/bootstrap.js").is_file())
             runtime_dirs = [path for path in (output / "runtime").iterdir() if path.is_dir()]
@@ -159,6 +170,14 @@ class PagesPublishTests(unittest.TestCase):
                      "0216-31f3db39524533b6", "0217-d8fed3f03866afe2"]:
             self.assertIn(f"https://res.cloudinary.com/do7vwsnpg/image/upload/", server_entry)
             self.assertIn(name, server_entry)
+
+    def test_pages_runtime_keeps_dynamic_image_fallbacks_inside_project_root(self):
+        pending = (ROOT / "assets/js/ui/friend-pending.js").read_text(encoding="utf-8")
+        voice = (ROOT / "assets/js/ui/voice.js").read_text(encoding="utf-8")
+        self.assertIn('appUrl("images/0208-2ccd8ae8b2379360.png")', pending)
+        self.assertIn('appUrl("images/0208-2ccd8ae8b2379360.png")', voice)
+        self.assertNotIn('= "/images/', pending)
+        self.assertNotIn('= "/images/', voice)
 
     def test_cloud_admin_requires_server_allowlist_and_mfa_aal2(self):
         edge = (ROOT / "priv/supabase/functions/admin-gate/index.ts").read_text(encoding="utf-8")

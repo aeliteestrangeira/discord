@@ -14,6 +14,7 @@ STATIC_FONTS = ROOT / "priv" / "static" / "fonts"
 STATIC_ASSETS = ROOT / "priv" / "static" / "assets"
 ASSET_CSS = ROOT / "assets" / "css"
 ASSET_JS = ROOT / "assets" / "js"
+PAGES_IMAGES = ROOT / "assets" / "pages-images"
 
 PAGE_MAP = {
     "index.html": "login.html",
@@ -105,6 +106,7 @@ def pages_html(source: Path, destination: str, runtime_path: str) -> str:
         text = text.replace(f'src="images/{name}"', f'src="{url}"')
     for root_relative, pages_relative in PAGES_RELATIVE_STYLESHEETS.items():
         text = text.replace(root_relative, pages_relative)
+    text = text.replace('src="/images/', 'src="images/')
     text = text.replace('src="ui.js"', f'src="{runtime_path}/ui.js"')
     runtime_script = f'<script src="{runtime_path}/ui.js" defer></script>'
     if destination in PAGES_RUNTIME_PAGES and runtime_script not in text:
@@ -133,6 +135,7 @@ def build(output: Path) -> None:
     copy_tree_contents(ASSET_CSS, output)
     copy_tree_contents(ASSET_JS, output)
     copy_tree_contents(ASSET_JS, output / runtime_path)
+    copy_tree_contents(PAGES_IMAGES, output / "images")
     shutil.copy2(ASSET_CSS / "captcha.css", output / runtime_path / "captcha.css")
     copy_tree_contents(STATIC_FONTS, output / "fonts")
     copy_tree_contents(STATIC_ASSETS, output / "assets")
