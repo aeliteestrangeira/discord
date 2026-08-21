@@ -1,4 +1,4 @@
-import { clearInitialFocus, wireInputFocusStates, wireNavigation } from "./runtime.js";
+import { clearInitialFocus, ensureAuthProvider, wireInputFocusStates, wireNavigation } from "./runtime.js";
 import { State } from "./state.js";
 
 let booted = false;
@@ -10,6 +10,14 @@ function prewarmHumanVerification() {
 }
 
 async function bootLogin() {
+  if (new URL(location.href).searchParams.has("code")) {
+    const authProvider = await ensureAuthProvider();
+    const session = await authProvider.session();
+    if (session?.authenticated) {
+      location.replace("channels.html");
+      return;
+    }
+  }
   const { wireForgotPassword, wireLoginForm, wirePasskeyLogin } = await import("./login.js");
   const loginErrors = wireLoginForm();
   wireForgotPassword(loginErrors);

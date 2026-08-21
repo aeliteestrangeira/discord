@@ -23,7 +23,7 @@ class PagesPublishTests(unittest.TestCase):
             index = (output / "index.html").read_text(encoding="utf-8")
             self.assertIn("Boas-vindas de volta!", index)
             self.assertIn('href="discord.css"', index)
-            self.assertIn('src="ui.js"', index)
+            self.assertRegex(index, r'src="runtime/[a-f0-9]{16}/ui\.js"')
             self.assertNotIn("O mesmo site, agora em aplicativo desktop.", index)
             self.assertNotIn("WINDOWS DESKTOP", index)
             self.assertTrue((output / "register.html").is_file())
@@ -59,6 +59,8 @@ class PagesPublishTests(unittest.TestCase):
             self.assertIn("adminGate", cloud_runtime)
             self.assertIn("getAuthenticatorAssuranceLevel", cloud_runtime)
             self.assertIn("challengeAndVerify", cloud_runtime)
+            self.assertIn("exchangeCodeForSession(authCode)", cloud_runtime)
+            self.assertIn('searchParams.delete("code")', cloud_runtime)
             admin_html = (output / "admin/index.html").read_text(encoding="utf-8")
             admin_js = (output / "admin.js").read_text(encoding="utf-8")
             self.assertIn("Painel administrativo", admin_html)
@@ -120,6 +122,16 @@ class PagesPublishTests(unittest.TestCase):
         self.assertIn('routeName === "channels.html"', state)
         self.assertIn('initialPath.startsWith("/channels/")', state)
         self.assertIn('link.href = new URL("../captcha.css", import.meta.url).href;', captcha)
+
+    def test_magic_link_callback_is_exchanged_and_redirected(self):
+        cloud_runtime = (ROOT / "assets/js/cloud-runtime.js").read_text(encoding="utf-8")
+        bootstrap = (ROOT / "assets/js/ui/bootstrap.js").read_text(encoding="utf-8")
+        self.assertIn('const authCode = String(callbackUrl.searchParams.get("code")', cloud_runtime)
+        self.assertIn("detectSessionInUrl: false", cloud_runtime)
+        self.assertIn("exchangeCodeForSession(authCode)", cloud_runtime)
+        self.assertIn('history.replaceState(history.state, "",', cloud_runtime)
+        self.assertIn('new URL(location.href).searchParams.has("code")', bootstrap)
+        self.assertIn('location.replace("channels.html")', bootstrap)
 
     def test_channels_hydrates_onboarding_assets_from_cloudinary(self):
         server_entry = (ROOT / "assets/js/ui/server-entry.js").read_text(encoding="utf-8")
